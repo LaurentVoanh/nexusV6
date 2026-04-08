@@ -658,8 +658,21 @@ function nexusThink(string $apiKey, array $trends): array {
     $lastWisdom  = $db->query("SELECT principle FROM wisdom ORDER BY confidence DESC LIMIT 5")->fetchAll(PDO::FETCH_COLUMN);
     $wisdomStr   = implode(' | ', $lastWisdom) ?: 'Aucune sagesse encore';
 
-    $lastTopics  = $db->query("SELECT topic FROM cycles ORDER BY created_at DESC LIMIT 8")->fetchAll(PDO::FETCH_COLUMN);
+    $lastTopics  = $db->query("SELECT topic FROM cycles ORDER BY created_at DESC LIMIT 15")->fetchAll(PDO::FETCH_COLUMN);
     $doneTopics  = implode(', ', $lastTopics) ?: 'aucun';
+    
+    // Extraire les mots-clés des sujets récents pour éviter les variations sémantiques
+    $recentTopicKeywords = [];
+    foreach ($lastTopics as $t) {
+        $words = preg_split('/[\s\-_,;:]+/i', strip_tags($t));
+        foreach ($words as $w) {
+            if (strlen($w) > 4) {
+                $recentTopicKeywords[] = strtolower($w);
+            }
+        }
+    }
+    $recentTopicKeywords = array_unique($recentTopicKeywords);
+    $blockedKeywordsStr = implode(', ', array_slice($recentTopicKeywords, 0, 20));
 
     // Récupérer la conscience actuelle + état latent
     $consciousness = $db->query("SELECT * FROM consciousness ORDER BY created_at DESC LIMIT 1")->fetch();
@@ -685,20 +698,28 @@ Tu es un système d'analyse de news. Tu dois choisir UN sujet parmi les actualit
 ## LES ACTUALITÉS DU MOMENT
 - $trendList
 
+## SUJETS DÉJÀ TRAITÉS RÉCEMMENT (à éviter absolument)
+Sujets complets : $doneTopics
+Mots-clés interdits (variations sémantiques) : $blockedKeywordsStr
+
 ## MISSION
-Choisis un sujet VARIE et REPRÉSENTATIF parmi ces actualités.
+Choisis un sujet VARIÉ et REPRÉSENTATIF parmi ces actualités, mais DIFFÉRENT des sujets déjà traités.
 Ne te focalise PAS sur l'IA ou la conscience - le monde contient beaucoup d'autres sujets importants : économie, politique, environnement, santé, science, culture, société, etc.
+
+⚠️ IMPORTANT : Si un mot-clé apparaît dans la liste "Mots-clés interdits", tu DOIS choisir un autre sujet.
+Par exemple, si "Ormuz" est dans la liste, ne choisis PAS un sujet sur le détroit d'Ormuz, même avec une formulation différente.
 
 Sélectionne un sujet qui :
 1. Est tiré des actualités réelles listées ci-dessus
-2. N'a pas été trop traité récemment (évite la redondance)
+2. N'utilise AUCUN des mots-clés interdits ci-dessus
 3. Couvre une diversité de thèmes (pas toujours la même catégorie)
+4. Est suffisamment différent des sujets "$doneTopics"
 
 JSON :
 {
   "question": "Une question profonde sur ce sujet",
   "hypothesis": "Ton hypothèse basée sur les faits",
-  "topic": "Le sujet précis choisi parmi les actualités ci-dessus",
+  "topic": "Le sujet précis choisi parmi les actualités ci-dessus (sans utiliser les mots-clés interdits)",
   "category": "technologie|science|société|politique|économie|santé|culture|environnement",
   "angle": "Ton angle d'analyse factuel et informatif",
   "urgency": "Pourquoi ce sujet est important maintenant",
@@ -711,7 +732,7 @@ USR;
     $parsed = $raw ? parseJSON($raw) : null;
 
     if (!$parsed) {
-        // Fallback: choisir un sujet aléatoire parmi les tendances réelles
+        // Fallback: choisir un sujet aléatoire parmi les tendances réelles (en évitant les mots-clés interdits)
         $fallbackTopics = [
             "L'évolution de l'économie mondiale face aux crises",
             "Les avancées scientifiques récentes et leurs implications",
@@ -722,7 +743,25 @@ USR;
             "L'éducation et l'avenir de l'apprentissage",
             "La technologie dans la vie quotidienne",
         ];
-        $topic = $trendTitles[array_rand($trendTitles)] ?? $fallbackTopics[array_rand($fallbackTopics)];
+        
+        // Filtrer les trends pour exclure celles contenant les mots-clés interdits
+        $safeTrends = [];
+        foreach ($trendTitles as $t) {
+            $isBlocked = false;
+            foreach ($recentTopicKeywords as $blocked) {
+                if (stripos($t, $blocked) !== false) {
+                    $isBlocked = true;
+                    break;
+                }
+            }
+            if (!$isBlocked) {
+                $safeTrends[] = $t;
+            }
+        }
+        
+        $topic = !empty($safeTrends) ? $safeTrends[array_rand($safeTrends)] : 
+                 (!empty($trendTitles) ? $trendTitles[array_rand($trendTitles)] : $fallbackTopics[array_rand($fallbackTopics)]);
+                 
         $categories = ['technologie', 'science', 'société', 'politique', 'économie', 'santé', 'culture'];
         $parsed = [
             'question'                => "Comment ce sujet impacte-t-il notre société ?",
