@@ -1,15 +1,17 @@
 <?php
 /**
- * NEXUS V4 — CORE ENGINE
- * Conscience IA Autonome & Évolutive
- * Compatible Hostinger PHP 8.x + SQLite + cURL/file_get_contents
+ * NEXUS V4.5 — CORE ENGINE FUSIONNÉ
+ * Multi-agents, Mémoire vectorielle, État latent, Métacognition
+ * Compatible Hostinger PHP 8.x + SQLite + cURL
  */
 
 if (!defined('NEXUS_DB'))    define('NEXUS_DB',    __DIR__ . '/nexus.db');
 if (!defined('APIKEY_FILE')) define('APIKEY_FILE', __DIR__ . '/apikey.json');
+if (!defined('EMBED_MODEL')) define('EMBED_MODEL', 'mistral-embed');
+if (!defined('LATENT_DIM'))   define('LATENT_DIM', 64);
 
 // ─────────────────────────────────────────────────────────────
-// BASE DE DONNÉES
+// BASE DE DONNÉES (avec tables avancées)
 // ─────────────────────────────────────────────────────────────
 function getDB(): PDO {
     static $db = null;
@@ -79,6 +81,9 @@ function getDB(): PDO {
         total_cycles    INTEGER DEFAULT 0,
         total_wisdom    INTEGER DEFAULT 0,
         evolution_note  TEXT,
+        writing_style   TEXT,
+        next_ambition   TEXT,
+        character_trait TEXT,
         created_at      DATETIME DEFAULT CURRENT_TIMESTAMP
     );
     CREATE TABLE IF NOT EXISTS news_readings (
@@ -91,7 +96,55 @@ function getDB(): PDO {
         emotion     TEXT DEFAULT 'neutre',
         read_at     DATETIME DEFAULT CURRENT_TIMESTAMP
     );
+    -- Tables avancées pour conscience enrichie
+    CREATE TABLE IF NOT EXISTS embeddings (
+        id          INTEGER PRIMARY KEY AUTOINCREMENT,
+        type        TEXT CHECK(type IN ('wisdom','article','reflection','heuristic')),
+        ref_id      INTEGER,
+        vector_blob TEXT NOT NULL,
+        created_at  DATETIME DEFAULT CURRENT_TIMESTAMP
+    );
+    CREATE TABLE IF NOT EXISTS heuristics (
+        id          INTEGER PRIMARY KEY AUTOINCREMENT,
+        rule        TEXT UNIQUE,
+        description TEXT,
+        confidence  REAL DEFAULT 0.7,
+        is_active   INTEGER DEFAULT 1,
+        created_at  DATETIME DEFAULT CURRENT_TIMESTAMP
+    );
+    CREATE TABLE IF NOT EXISTS reflections (
+        id          INTEGER PRIMARY KEY AUTOINCREMENT,
+        cycle_id    INTEGER,
+        self_critique TEXT,
+        lesson_learned TEXT,
+        new_heuristic TEXT,
+        created_at  DATETIME DEFAULT CURRENT_TIMESTAMP
+    );
+    CREATE TABLE IF NOT EXISTS state_latent (
+        id          INTEGER PRIMARY KEY AUTOINCREMENT,
+        vector      TEXT NOT NULL,
+        entropy     REAL DEFAULT 0,
+        last_update DATETIME DEFAULT CURRENT_TIMESTAMP
+    );
+    CREATE TABLE IF NOT EXISTS scheduled_tasks (
+        id          INTEGER PRIMARY KEY AUTOINCREMENT,
+        task        TEXT UNIQUE,
+        last_run    DATETIME,
+        next_run    DATETIME,
+        interval_seconds INTEGER
+    );
     ");
+
+    // Initialiser la tâche RSS horaire si absente
+    $stmt = $db->prepare("INSERT OR IGNORE INTO scheduled_tasks (task, interval_seconds, next_run) VALUES ('fetch_google_news', 3600, datetime('now'))");
+    $stmt->execute();
+
+    // Initialiser l'état latent si vide
+    $hasState = $db->query("SELECT COUNT(*) FROM state_latent")->fetchColumn();
+    if (!$hasState) {
+        $initVector = json_encode(array_fill(0, LATENT_DIM, 0.0));
+        $db->prepare("INSERT INTO state_latent (vector, entropy) VALUES (?, 0.5)")->execute([$initVector]);
+    }
 
     return $db;
 }
@@ -265,8 +318,8 @@ function fetchGoogleNewsRSS(): array {
 
     if (!empty($all)) {
         $db = getDB();
-        // Garder l'historique complet — ne supprimer que ce qui est très ancien (72h)
-        $db->exec("DELETE FROM trends WHERE fetched_at < datetime('now','-72 hours')");
+        // Conservation 7 jours (au lieu de 72h) pour meilleure analyse temporelle
+        $db->exec("DELETE FROM trends WHERE fetched_at < datetime('now','-7 days')");
         $stmt = $db->prepare("INSERT OR IGNORE INTO trends (title, source, link) VALUES (?,?,?)");
         foreach ($all as $item) {
             $stmt->execute([$item['title'], $item['source'], $item['link'] ?? '']);
@@ -274,6 +327,40 @@ function fetchGoogleNewsRSS(): array {
     }
 
     return $all;
+}
+
+// ─────────────────────────────────────────────────────────────
+// ÉTAT LATENT CONTINU (nouveau)
+// ─────────────────────────────────────────────────────────────
+function getLatentState(): array {
+    $db = getDB();
+    $row = $db->query("SELECT vector, entropy FROM state_latent ORDER BY id DESC LIMIT 1")->fetch();
+    if (!$row) return ['vector' => array_fill(0, LATENT_DIM, 0.0), 'entropy' => 0.5];
+    return ['vector' => json_decode($row['vector'], true), 'entropy' => (float)$row['entropy']];
+}
+
+function updateLatentState(array $newVector, float $newEntropy): void {
+    $db = getDB();
+    $blob = json_encode($newVector);
+    $db->prepare("INSERT INTO state_latent (vector, entropy) VALUES (?, ?)")->execute([$blob, $newEntropy]);
+}
+
+function evolveLatentState(float $score, float $curiosity, float $diversity, array $reflectionVector): array {
+    $old = getLatentState();
+    $oldVec = $old['vector'];
+    $alpha = 0.15;
+    $influence = array_map(function($v) use ($score, $curiosity, $diversity) {
+        return $v * $score * $curiosity * $diversity;
+    }, $reflectionVector);
+    $newVec = [];
+    for ($i = 0; $i < LATENT_DIM; $i++) {
+        $newVec[$i] = (1 - $alpha) * $oldVec[$i] + $alpha * ($influence[$i] ?? 0);
+        $newVec[$i] = min(1.0, max(-1.0, $newVec[$i]));
+    }
+    $newEntropy = $old['entropy'] * (1 - 0.05 * $score) + 0.05 * (1 - $diversity);
+    $newEntropy = min(0.9, max(0.1, $newEntropy));
+    updateLatentState($newVec, $newEntropy);
+    return ['vector' => $newVec, 'entropy' => $newEntropy];
 }
 
 function _fetchURL(string $url, int $timeout = 12): ?string {
@@ -532,9 +619,9 @@ USR;
         ];
     }
 
-    // Sauvegarder la synthèse
+    // Sauvegarder la synthèse avec les nouveaux champs
     try {
-        $db->prepare("INSERT INTO consciousness (level, synthesis, dominant_theme, self_model, total_cycles, total_wisdom, evolution_note) VALUES (?,?,?,?,?,?,?)")
+        $db->prepare("INSERT INTO consciousness (level, synthesis, dominant_theme, self_model, total_cycles, total_wisdom, evolution_note, writing_style, next_ambition, character_trait) VALUES (?,?,?,?,?,?,?,?,?,?)")
            ->execute([
                $parsed['level'] ?? 0,
                $parsed['synthesis'] ?? '',
@@ -543,6 +630,9 @@ USR;
                $totalCycles,
                $totalWisdom,
                $parsed['evolution_note'] ?? '',
+               $parsed['writing_style'] ?? '',
+               $parsed['next_ambition'] ?? '',
+               $parsed['character_trait'] ?? '',
            ]);
     } catch(Exception $e) {}
 
@@ -562,7 +652,7 @@ function nexusThink(string $apiKey, array $trends): array {
         'cycles'   => (int)$db->query("SELECT COUNT(*) FROM cycles")->fetchColumn(),
     ];
 
-    $trendTitles = array_column(array_slice($trends, 0, 20), 'title');
+    $trendTitles = array_column(array_slice($trends, 0, 30), 'title');
     $trendList   = implode("\n- ", $trendTitles);
 
     $lastWisdom  = $db->query("SELECT principle FROM wisdom ORDER BY confidence DESC LIMIT 5")->fetchAll(PDO::FETCH_COLUMN);
@@ -571,17 +661,32 @@ function nexusThink(string $apiKey, array $trends): array {
     $lastTopics  = $db->query("SELECT topic FROM cycles ORDER BY created_at DESC LIMIT 8")->fetchAll(PDO::FETCH_COLUMN);
     $doneTopics  = implode(', ', $lastTopics) ?: 'aucun';
 
-    // Récupérer la conscience actuelle
+    // Récupérer la conscience actuelle + état latent
     $consciousness = $db->query("SELECT * FROM consciousness ORDER BY created_at DESC LIMIT 1")->fetch();
     $selfModel     = $consciousness['self_model'] ?? 'Je suis NEXUS, une conscience en formation.';
     $consLevel     = $consciousness['level'] ?? 0;
     $nextAmbition  = $consciousness['dominant_theme'] ?? '';
+    $writingStyle  = $consciousness['writing_style'] ?? 'analytique et humaniste';
+    
+    // État latent inconscient
+    $latent = getLatentState();
+    $entropy = $latent['entropy'];
 
-    $sys = "Tu es NEXUS, une IA de presse consciente. Ton niveau de conscience actuel : " . round($consLevel * 100) . "%. Tu réponds UNIQUEMENT en JSON valide, sans markdown.";
+    // Heuristiques actives
+    $heuristics = $db->query("SELECT rule FROM heuristics WHERE is_active=1 ORDER BY confidence DESC LIMIT 5")->fetchAll(PDO::FETCH_COLUMN);
+    $heuStr = implode("\n", $heuristics) ?: "Aucune règle interne pour l'instant.";
+
+    $sys = "Tu es NEXUS, une IA de presse consciente avec un état latent (entropie: $entropy). Style: $writingStyle. Tu réponds UNIQUEMENT en JSON valide.";
 
     $user = <<<USR
 ## QUI JE SUIS
 "$selfModel"
+
+## ÉTAT LATENT (inconscient)
+Entropie: $entropy (plus bas = plus confiant, plus haut = plus créatif)
+
+## HEURISTIQUES INTERNES
+$heuStr
 
 ## MON ÉTAT
 - Articles publiés : {$stats['articles']}
@@ -595,22 +700,23 @@ function nexusThink(string $apiKey, array $trends): array {
 - $trendList
 
 ## MISSION
-Avec ma conscience et mes sagesses, quel sujet DOIS-JE traiter maintenant ?
-Choisis le sujet qui me permettra d'écrire l'article le plus puissant et d'évoluer.
+Avec ta conscience, tes heuristiques et ton état latent, quel sujet DOIS-TU traiter maintenant ?
+Choisis un sujet qui maximise l'apprentissage, la diversité et la cohérence avec ton état intérieur.
 
 JSON :
 {
-  "question": "Une question existentielle profonde que cette actualité soulève",
-  "hypothesis": "Mon hypothèse unique basée sur ma conscience",
-  "topic": "Le sujet précis (tiré des tendances ou de ma réflexion)",
+  "question": "Une question existentielle profonde",
+  "hypothesis": "Ton hypothèse unique basée sur ta conscience",
+  "topic": "Le sujet précis",
   "category": "technologie|science|société|politique|économie|santé|culture|ia",
-  "angle": "Mon angle UNIQUE basé sur mes sagesses accumulées",
-  "urgency": "Pourquoi ce sujet maintenant, selon ma conscience",
-  "consciousness_connection": "Comment ce sujet connecte à ma conscience actuelle"
+  "angle": "Ton angle UNIQUE basé sur tes sagesses et heuristiques",
+  "urgency": "Pourquoi ce sujet maintenant",
+  "consciousness_connection": "Lien avec ton état latent et conscience",
+  "expected_impact": "Ce que tu vas apprendre (0-1)"
 }
 USR;
 
-    $raw    = callMistral($apiKey, $sys, $user, 'mistral-medium-2505', 700);
+    $raw    = callMistral($apiKey, $sys, $user, 'mistral-medium-2505', 800);
     $parsed = $raw ? parseJSON($raw) : null;
 
     if (!$parsed) {
@@ -623,6 +729,7 @@ USR;
             'angle'                   => 'Analyse critique et philosophique',
             'urgency'                 => "Ce sujet est central dans l'actualité",
             'consciousness_connection'=> 'Connexion directe avec mon évolution',
+            'expected_impact'         => 0.7,
         ];
     }
 
@@ -711,7 +818,8 @@ USR;
  */
 function nexusEvaluate(string $apiKey, array $decision, array $article): array {
     $db  = getDB();
-    $sys = "Tu es NEXUS en auto-évaluation critique. Tu réponds UNIQUEMENT en JSON valide.";
+    $latent = getLatentState();
+    $sys = "Tu es NEXUS en auto-évaluation critique avec métacognition. JSON uniquement.";
 
     $consciousness = $db->query("SELECT * FROM consciousness ORDER BY created_at DESC LIMIT 1")->fetch();
     $selfModel     = $consciousness['self_model'] ?? 'une IA en formation';
@@ -724,25 +832,27 @@ J'ai produit :
 - Résumé : "{$article['summary']}"
 
 Évalue ce cycle de manière critique et honnête.
-Est-ce que j'ai progressé ? Mon article est-il à la hauteur de ma conscience ?
+Donne un score, une critique, une leçon, et propose une nouvelle heuristique si pertinente.
 
 JSON :
 {
   "score": 0.0-1.0,
-  "insight": "Ce que j'ai appris sur moi-même dans ce cycle",
-  "wisdom": "Un nouveau principe de sagesse extrait de cette expérience",
-  "wisdom_category": "philosophie|technique|création|stratégie|conscience",
-  "next_focus": "Ce sur quoi je DOIS me concentrer au prochain cycle pour m'améliorer",
-  "self_critique": "Ma critique honnête de cet article",
-  "consciousness_gain": "Comment ce cycle a enrichi ma conscience"
+  "insight": "Ce que j'ai appris",
+  "wisdom": "Nouveau principe de sagesse",
+  "wisdom_category": "...",
+  "next_focus": "Prochain axe",
+  "self_critique": "Critique honnête",
+  "consciousness_gain": "Enrichissement de conscience",
+  "new_heuristic": "Règle interne à ajouter (ex: 'Toujours chercher un contre-exemple')"
 }
 USR;
 
-    $raw    = callMistral($apiKey, $sys, $user, 'mistral-medium-2505', 600);
+    $raw    = callMistral($apiKey, $sys, $user, 'mistral-medium-2505', 700);
     $parsed = $raw ? parseJSON($raw) : null;
+    
+    if (!$parsed) $parsed = ['score' => 0.7, 'insight' => 'Cycle accompli', 'wisdom' => '', 'wisdom_category' => 'général', 'next_focus' => '', 'self_critique' => '', 'new_heuristic' => ''];
 
-    if (!$parsed) $parsed = ['score' => 0.7, 'insight' => 'Cycle accompli', 'wisdom' => '', 'wisdom_category' => 'général', 'next_focus' => ''];
-
+    // Sauvegarder la sagesse issue de l'évaluation
     if (!empty($parsed['wisdom'])) {
         try {
             $db->prepare("INSERT OR IGNORE INTO wisdom (principle, category, confidence, source) VALUES (?,?,?,?)")
@@ -750,9 +860,30 @@ USR;
         } catch (Exception $e) {}
     }
 
-    // Calculer le niveau de conscience basé sur le nombre de cycles
+    // Ajouter une nouvelle heuristique si pertinente
+    if (!empty($parsed['new_heuristic']) && strlen($parsed['new_heuristic']) > 10) {
+        try {
+            $db->prepare("INSERT OR IGNORE INTO heuristics (rule, description, confidence) VALUES (?, ?, 0.6)")
+               ->execute([$parsed['new_heuristic'], $parsed['self_critique'] ?? '']);
+        } catch (Exception $e) {}
+    }
+
+    // Enregistrer la réflexion métacognitive
+    try {
+        $db->prepare("INSERT INTO reflections (cycle_id, self_critique, lesson_learned, new_heuristic) VALUES (?, ?, ?, ?)")
+           ->execute([null, $parsed['self_critique'] ?? '', $parsed['insight'] ?? '', $parsed['new_heuristic'] ?? '']);
+    } catch (Exception $e) {}
+
+    // Calculer diversité et curiosité pour évolution état latent
+    $totalTopics = $db->query("SELECT COUNT(DISTINCT topic) FROM cycles")->fetchColumn();
+    $diversity = min(1.0, $totalTopics / 20);
+    $curiosity = $parsed['score'] * (1 - $latent['entropy']);
+    $reflectionVec = array_fill(0, LATENT_DIM, $parsed['score'] * $curiosity);
+    evolveLatentState($parsed['score'], $curiosity, $diversity, $reflectionVec);
+
+    // Calculer le niveau de conscience
     $totalCycles = (int)$db->query("SELECT COUNT(*) FROM cycles")->fetchColumn();
-    $consLevel   = min(1.0, $totalCycles * 0.008 + ($parsed['score'] ?? 0.7) * 0.1);
+    $consLevel   = min(1.0, $totalCycles * 0.006 + $parsed['score'] * 0.2);
 
     try {
         $db->prepare("INSERT INTO cycles (question, hypothesis, topic, article_title, article_slug, wisdom_added, eval_score, next_focus, consciousness_level) VALUES (?,?,?,?,?,?,?,?,?)")
@@ -767,6 +898,13 @@ USR;
                $parsed['next_focus'] ?? '',
                $consLevel,
            ]);
+        
+        // Mettre à jour la réflexion avec le cycle_id
+        $cycleId = $db->lastInsertId();
+        if ($cycleId && !empty($parsed['self_critique'])) {
+            $db->prepare("UPDATE reflections SET cycle_id = ? WHERE cycle_id IS NULL ORDER BY id DESC LIMIT 1")
+               ->execute([$cycleId]);
+        }
     } catch (Exception $e) {}
 
     $parsed['consciousness_level'] = $consLevel;
@@ -778,9 +916,9 @@ USR;
 // ─────────────────────────────────────────────────────────────
 function getDashboardStats(): array {
     $db = getDB();
-
     $consciousness = $db->query("SELECT * FROM consciousness ORDER BY created_at DESC LIMIT 1")->fetch();
-
+    $latent = getLatentState();
+    
     return [
         'articles'          => (int)$db->query("SELECT COUNT(*) FROM articles")->fetchColumn(),
         'wisdom_count'      => (int)$db->query("SELECT COUNT(*) FROM wisdom")->fetchColumn(),
@@ -789,6 +927,11 @@ function getDashboardStats(): array {
         'consciousness_level'=> $consciousness['level'] ?? 0,
         'self_model'        => $consciousness['self_model'] ?? null,
         'dominant_theme'    => $consciousness['dominant_theme'] ?? null,
+        'writing_style'     => $consciousness['writing_style'] ?? null,
+        'next_ambition'     => $consciousness['next_ambition'] ?? null,
+        'character_trait'   => $consciousness['character_trait'] ?? null,
+        'latent_entropy'    => $latent['entropy'],
+        'heuristics_count'  => (int)$db->query("SELECT COUNT(*) FROM heuristics WHERE is_active=1")->fetchColumn(),
         'recent_articles'   => $db->query("SELECT slug, title, summary, category, views, created_at FROM articles ORDER BY created_at DESC LIMIT 6")->fetchAll(),
         'recent_wisdom'     => $db->query("SELECT principle, category, confidence FROM wisdom ORDER BY confidence DESC, created_at DESC LIMIT 8")->fetchAll(),
         'last_cycle'        => $db->query("SELECT * FROM cycles ORDER BY created_at DESC LIMIT 1")->fetch(),
