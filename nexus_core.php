@@ -1387,3 +1387,60 @@ function getNewsReadings(int $page = 1, int $per = 20): array {
     $rows   = $db->query("SELECT * FROM news_readings ORDER BY read_at DESC LIMIT $per OFFSET $offset")->fetchAll();
     return ['total' => $total, 'page' => $page, 'per' => $per, 'readings' => $rows];
 }
+
+// ─────────────────────────────────────────────────────────────
+// GESTION DES FLUX RSS - NOUVELLES FONCTIONS
+// ─────────────────────────────────────────────────────────────
+function getRssFeeds(): array {
+    $db = getDB();
+    return $db->query("SELECT * FROM rss_feeds ORDER BY priority DESC, name ASC")->fetchAll();
+}
+
+function addRssFeed(string $name, string $url, string $category = 'general', string $subcategory = 'general', ?string $searchQuery = null, int $priority = 5): array {
+    $db = getDB();
+    $name = sanitizeFeedName($name);
+    
+    if (empty($name) || empty($url)) {
+        return ['error' => 'Nom et URL requis'];
+    }
+    
+    try {
+        $stmt = $db->prepare("INSERT INTO rss_feeds (name, url, category, subcategory, search_query, priority, is_auto_generated) VALUES (?, ?, ?, ?, ?, ?, 0)");
+        $stmt->execute([$name, $url, $category, $subcategory, $searchQuery, $priority]);
+        return ['success' => true, 'id' => $db->lastInsertId()];
+    } catch (PDOException $e) {
+        if (strpos($e->getMessage(), 'UNIQUE') !== false) {
+            return ['error' => 'Ce nom de flux existe déjà'];
+        }
+        return ['error' => 'Erreur: ' . $e->getMessage()];
+    }
+}
+
+function updateRssFeedPriority(int $id, int $priority): bool {
+    $db = getDB();
+    $stmt = $db->prepare("UPDATE rss_feeds SET priority=? WHERE id=?");
+    return $stmt->execute([$priority, $id]);
+}
+
+function deleteRssFeed(int $id): bool {
+    $db = getDB();
+    $stmt = $db->prepare("DELETE FROM rss_feeds WHERE id=?");
+    return $stmt->execute([$id]);
+}
+
+function toggleRssFeedActive(int $id): bool {
+    $db = getDB();
+    $stmt = $db->prepare("UPDATE rss_feeds SET is_active = NOT is_active WHERE id=?");
+    return $stmt->execute([$id]);
+}
+
+function getRssFeedStats(): array {
+    $db = getDB();
+    $stats = $db->query("SELECT 
+        COUNT(*) as total,
+        SUM(CASE WHEN is_active=1 THEN 1 ELSE 0 END) as active,
+        SUM(CASE WHEN is_auto_generated=1 THEN 1 ELSE 0 END) as auto_generated,
+        AVG(fetch_count) as avg_fetches
+        FROM rss_feeds")->fetch(PDO::FETCH_ASSOC);
+    return $stats ?: ['total' => 0, 'active' => 0, 'auto_generated' => 0, 'avg_fetches' => 0];
+}
