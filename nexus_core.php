@@ -360,10 +360,62 @@ function fetchGoogleNewsRSS(): array {
     return $all;
 }
 
-// Fonctions _fetchURL, _parseRSSItems, _cleanTitle inchangées (garder)
-function _fetchURL(string $url, int $timeout = 12): ?string { /* ... */ }
-function _parseRSSItems(string $xmlContent, string $category): array { /* ... */ }
-function _cleanTitle(string $t): string { /* ... */ }
+// Fonctions utilitaires pour fetch URL et parser RSS
+function _fetchURL(string $url, int $timeout = 12): ?string {
+    if (function_exists('curl_init')) {
+        $ch = curl_init($url);
+        curl_setopt_array($ch, [
+            CURLOPT_RETURNTRANSFER => true,
+            CURLOPT_FOLLOWLOCATION => true,
+            CURLOPT_USERAGENT      => 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+            CURLOPT_TIMEOUT        => $timeout,
+            CURLOPT_CONNECTTIMEOUT => 5,
+            CURLOPT_SSL_VERIFYPEER => false,
+        ]);
+        $response = curl_exec($ch);
+        $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        curl_close($ch);
+        return ($httpCode === 200 && $response) ? $response : null;
+    } elseif (ini_get('allow_url_fopen')) {
+        $ctx = stream_context_create(['http' => [
+            'method'  => 'GET',
+            'header'  => "User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36\r\n",
+            'timeout' => $timeout,
+        ]]);
+        return @file_get_contents($url, false, $ctx) ?: null;
+    }
+    return null;
+}
+
+function _parseRSSItems(string $xmlContent, string $category): array {
+    $items = [];
+    libxml_use_internal_errors(true);
+    $xml = simplexml_load_string($xmlContent);
+    if (!$xml) return [];
+    
+    foreach ($xml->channel->item as $item) {
+        $title = _cleanTitle((string)$item->title);
+        $source = isset($item->source) ? (string)$item->source : 'Google News';
+        $link = (string)$item->link;
+        $pubDate = isset($item->pubDate) ? (string)$item->pubDate : date('r');
+        
+        $items[] = [
+            'title'   => $title,
+            'source'  => $source,
+            'link'    => $link,
+            'category'=> $category,
+            'pubDate' => $pubDate,
+        ];
+    }
+    return $items;
+}
+
+function _cleanTitle(string $t): string {
+    $t = trim($t);
+    $t = preg_replace('/\s+/', ' ', $t);
+    $t = str_replace(['&quot;', '&#039;', '&amp;'], ['"', "'", '&'], $t);
+    return $t;
+}
 
 // Traitement de TOUTES les nouvelles news (appelé par l'agent percepteur)
 function processAllNews(string $apiKey): array {
@@ -791,10 +843,50 @@ function getDashboardStats(): array {
     ];
 }
 
-// Les autres fonctions (getAllArticles, getArticleBySlug, getAllWisdom, getCyclesHistory, getConsciousnessHistory, getNewsReadings) restent inchangées.
-function getAllArticles(int $page = 1, int $per = 40): array { /* ... */ }
-function getArticleBySlug(string $slug): ?array { /* ... */ }
-function getAllWisdom(int $page = 1, int $per = 40): array { /* ... */ }
-function getCyclesHistory(int $page = 1, int $per = 40): array { /* ... */ }
-function getConsciousnessHistory(): array { /* ... */ }
-function getNewsReadings(int $page = 1, int $per = 20): array { /* ... */ }
+// Les autres fonctions (getAllArticles, getArticleBySlug, getAllWisdom, getCyclesHistory, getConsciousnessHistory, getNewsReadings)
+function getAllArticles(int $page = 1, int $per = 40): array {
+    $db = getDB();
+    $offset = ($page - 1) * $per;
+    $total = (int)$db->query("SELECT COUNT(*) FROM articles")->fetchColumn();
+    $rows = $db->query("SELECT id, slug, title, summary, topic, category, content, views, eval_score, created_at FROM articles ORDER BY created_at DESC LIMIT $per OFFSET $offset")->fetchAll();
+    return ['total' => $total, 'page' => $page, 'per' => $per, 'articles' => $rows];
+}
+
+function getArticleBySlug(string $slug): ?array {
+    $db = getDB();
+    $stmt = $db->prepare("SELECT * FROM articles WHERE slug = ?");
+    $stmt->execute([$slug]);
+    $art = $stmt->fetch();
+    if (!$art) return null;
+    $db->prepare("UPDATE articles SET views = views + 1 WHERE id = ?")->execute([$art['id']]);
+    return $art;
+}
+
+function getAllWisdom(int $page = 1, int $per = 40): array {
+    $db = getDB();
+    $offset = ($page - 1) * $per;
+    $total = (int)$db->query("SELECT COUNT(*) FROM wisdom")->fetchColumn();
+    $rows = $db->query("SELECT * FROM wisdom ORDER BY confidence DESC, created_at DESC LIMIT $per OFFSET $offset")->fetchAll();
+    return ['total' => $total, 'page' => $page, 'per' => $per, 'wisdom' => $rows];
+}
+
+function getCyclesHistory(int $page = 1, int $per = 40): array {
+    $db = getDB();
+    $offset = ($page - 1) * $per;
+    $total = (int)$db->query("SELECT COUNT(*) FROM cycles")->fetchColumn();
+    $rows = $db->query("SELECT * FROM cycles ORDER BY created_at DESC LIMIT $per OFFSET $offset")->fetchAll();
+    return ['total' => $total, 'page' => $page, 'per' => $per, 'cycles' => $rows];
+}
+
+function getConsciousnessHistory(): array {
+    $db = getDB();
+    return $db->query("SELECT * FROM consciousness ORDER BY created_at DESC LIMIT 30")->fetchAll();
+}
+
+function getNewsReadings(int $page = 1, int $per = 20): array {
+    $db = getDB();
+    $offset = ($page - 1) * $per;
+    $total = (int)$db->query("SELECT COUNT(*) FROM news_readings")->fetchColumn();
+    $rows = $db->query("SELECT * FROM news_readings ORDER BY created_at DESC LIMIT $per OFFSET $offset")->fetchAll();
+    return ['total' => $total, 'page' => $page, 'per' => $per, 'readings' => $rows];
+}
