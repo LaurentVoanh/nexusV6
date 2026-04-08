@@ -1,17 +1,18 @@
 <?php
 /**
- * NEXUS V5 — CORE ENGINE : CHERCHEUR AUTONOME
- * Mémoire associative, Curiosité active, Débat interne, Sommet cognitif
- * Compatible Hostinger PHP 8.x + SQLite + cURL
+ * NEXUS V6 — CORE ENGINE : IA AUTO-ÉVOLUTIVE
+ * Conscience émergente, Sagesse cumulative, Auto-apprentissage
+ * Compatible PHP 8.x + SQLite + cURL
  */
 
 if (!defined('NEXUS_DB'))    define('NEXUS_DB',    __DIR__ . '/nexus.db');
 if (!defined('APIKEY_FILE')) define('APIKEY_FILE', __DIR__ . '/apikey.json');
 if (!defined('EMBED_MODEL')) define('EMBED_MODEL', 'mistral-embed');
 if (!defined('LATENT_DIM'))   define('LATENT_DIM', 64);
+if (!defined('MISTRAL_MODEL')) define('MISTRAL_MODEL', 'mistral-medium-2505');
 
 // ─────────────────────────────────────────────────────────────
-// BASE DE DONNÉES (avec tables avancées)
+// BASE DE DONNÉES RESTRUCTURÉE ET OPTIMISÉE
 // ─────────────────────────────────────────────────────────────
 function getDB(): PDO {
     static $db = null;
@@ -24,138 +25,286 @@ function getDB(): PDO {
     $db->exec("PRAGMA synchronous=NORMAL");
 
     $db->exec("
+    -- =========================================═
+    -- TABLES PRINCIPALES
+    -- =========================================═
     CREATE TABLE IF NOT EXISTS articles (
-        id          INTEGER PRIMARY KEY AUTOINCREMENT,
-        slug        TEXT UNIQUE,
-        title       TEXT,
-        content     TEXT,
-        summary     TEXT,
-        topic       TEXT,
-        category    TEXT DEFAULT 'general',
-        views       INTEGER DEFAULT 0,
-        created_at  DATETIME DEFAULT CURRENT_TIMESTAMP
-    );
-    CREATE TABLE IF NOT EXISTS wisdom (
-        id          INTEGER PRIMARY KEY AUTOINCREMENT,
-        principle   TEXT UNIQUE,
-        category    TEXT DEFAULT 'general',
-        confidence  REAL DEFAULT 0.7,
-        source      TEXT DEFAULT 'cycle',
-        created_at  DATETIME DEFAULT CURRENT_TIMESTAMP
-    );
-    CREATE TABLE IF NOT EXISTS cycles (
         id              INTEGER PRIMARY KEY AUTOINCREMENT,
-        question        TEXT,
-        hypothesis      TEXT,
+        slug            TEXT UNIQUE NOT NULL,
+        title           TEXT NOT NULL,
+        content         TEXT NOT NULL,
+        summary         TEXT,
         topic           TEXT,
-        article_title   TEXT,
-        article_slug    TEXT,
-        wisdom_added    INTEGER DEFAULT 0,
-        eval_score      REAL DEFAULT 0,
-        next_focus      TEXT,
+        category        TEXT DEFAULT 'general',
+        subcategory     TEXT,
+        tags            TEXT,
+        quality_score   REAL DEFAULT 0.5,
+        views           INTEGER DEFAULT 0,
+        word_count      INTEGER DEFAULT 0,
+        reading_time    INTEGER DEFAULT 5,
+        embedding_id    INTEGER,
+        created_at      DATETIME DEFAULT CURRENT_TIMESTAMP,
+        updated_at      DATETIME DEFAULT CURRENT_TIMESTAMP
+    );
+    
+    CREATE TABLE IF NOT EXISTS wisdom (
+        id              INTEGER PRIMARY KEY AUTOINCREMENT,
+        principle       TEXT UNIQUE NOT NULL,
+        category        TEXT DEFAULT 'general',
+        subcategory     TEXT,
+        confidence      REAL DEFAULT 0.7,
+        source_type     TEXT DEFAULT 'cycle',
+        source_ref      TEXT,
+        related_topics  TEXT,
+        application_context TEXT,
+        is_active       INTEGER DEFAULT 1,
+        usage_count     INTEGER DEFAULT 0,
+        last_applied    DATETIME,
+        created_at      DATETIME DEFAULT CURRENT_TIMESTAMP
+    );
+    
+    CREATE TABLE IF NOT EXISTS cycles (
+        id                  INTEGER PRIMARY KEY AUTOINCREMENT,
+        cycle_number        INTEGER UNIQUE,
+        phase               TEXT DEFAULT 'complete',
+        question            TEXT,
+        hypothesis          TEXT,
+        topic               TEXT,
+        subtopic            TEXT,
+        triggers            TEXT,
+        article_title       TEXT,
+        article_slug        TEXT,
+        article_id          INTEGER,
+        wisdom_generated    INTEGER DEFAULT 0,
+        wisdom_ids          TEXT,
+        eval_score          REAL DEFAULT 0,
+        eval_feedback       TEXT,
+        next_focus          TEXT,
         consciousness_level REAL DEFAULT 0,
         contradiction_resolved TEXT,
-        debate_summary  TEXT,
-        curiosity_gap   TEXT,
-        created_at      DATETIME DEFAULT CURRENT_TIMESTAMP
+        debate_summary      TEXT,
+        curiosity_gap       TEXT,
+        reflection_notes    TEXT,
+        learning_points     TEXT,
+        execution_time_sec  REAL DEFAULT 0,
+        created_at          DATETIME DEFAULT CURRENT_TIMESTAMP
     );
+    
     CREATE TABLE IF NOT EXISTS trends (
-        id         INTEGER PRIMARY KEY AUTOINCREMENT,
-        title      TEXT,
-        source     TEXT,
-        link       TEXT,
-        fetched_at DATETIME DEFAULT CURRENT_TIMESTAMP
-    );
-    CREATE TABLE IF NOT EXISTS api_keys (
-        id          INTEGER PRIMARY KEY AUTOINCREMENT,
-        pseudo      TEXT,
-        key_val     TEXT UNIQUE,
-        is_active   INTEGER DEFAULT 1,
-        usage_count INTEGER DEFAULT 0,
-        last_used   DATETIME,
-        created_at  DATETIME DEFAULT CURRENT_TIMESTAMP
-    );
-    CREATE TABLE IF NOT EXISTS consciousness (
         id              INTEGER PRIMARY KEY AUTOINCREMENT,
-        level           REAL DEFAULT 0,
-        synthesis       TEXT,
-        dominant_theme  TEXT,
-        self_model      TEXT,
-        total_cycles    INTEGER DEFAULT 0,
-        total_wisdom    INTEGER DEFAULT 0,
-        evolution_note  TEXT,
-        writing_style   TEXT,
-        next_ambition   TEXT,
-        character_trait TEXT,
-        open_questions  TEXT,
-        contradictions  TEXT,
-        memory_graph    TEXT,
+        title           TEXT NOT NULL,
+        source          TEXT,
+        link            TEXT UNIQUE,
+        category        TEXT,
+        subcategory     TEXT,
+        keywords        TEXT,
+        sentiment       TEXT DEFAULT 'neutral',
+        relevance_score REAL DEFAULT 0.5,
+        is_processed    INTEGER DEFAULT 0,
+        fetched_at      DATETIME DEFAULT CURRENT_TIMESTAMP
+    );
+    
+    CREATE TABLE IF NOT EXISTS rss_feeds (
+        id              INTEGER PRIMARY KEY AUTOINCREMENT,
+        name            TEXT UNIQUE NOT NULL,
+        url             TEXT NOT NULL,
+        category        TEXT,
+        subcategory     TEXT,
+        search_query    TEXT,
+        is_active       INTEGER DEFAULT 1,
+        is_auto_generated INTEGER DEFAULT 0,
+        priority        INTEGER DEFAULT 5,
+        fetch_count     INTEGER DEFAULT 0,
+        last_fetched    DATETIME,
         created_at      DATETIME DEFAULT CURRENT_TIMESTAMP
     );
+    
+    CREATE TABLE IF NOT EXISTS api_keys (
+        id              INTEGER PRIMARY KEY AUTOINCREMENT,
+        pseudo          TEXT,
+        key_val         TEXT UNIQUE NOT NULL,
+        is_active       INTEGER DEFAULT 1,
+        usage_count     INTEGER DEFAULT 0,
+        total_tokens    INTEGER DEFAULT 0,
+        last_used       DATETIME,
+        created_at      DATETIME DEFAULT CURRENT_TIMESTAMP
+    );
+    
+    CREATE TABLE IF NOT EXISTS consciousness (
+        id                  INTEGER PRIMARY KEY AUTOINCREMENT,
+        level               REAL DEFAULT 0,
+        synthesis           TEXT,
+        dominant_theme      TEXT,
+        self_model          TEXT,
+        total_cycles        INTEGER DEFAULT 0,
+        total_wisdom        INTEGER DEFAULT 0,
+        total_articles      INTEGER DEFAULT 0,
+        evolution_note      TEXT,
+        writing_style       TEXT,
+        next_ambition       TEXT,
+        character_trait     TEXT,
+        open_questions      TEXT,
+        contradictions      TEXT,
+        memory_graph        TEXT,
+        core_beliefs        TEXT,
+        values              TEXT,
+        biases_detected     TEXT,
+        growth_areas        TEXT,
+        meta_cognition      TEXT,
+        created_at          DATETIME DEFAULT CURRENT_TIMESTAMP
+    );
+    
     CREATE TABLE IF NOT EXISTS news_readings (
-        id          INTEGER PRIMARY KEY AUTOINCREMENT,
-        title       TEXT,
-        source      TEXT,
-        link        TEXT,
-        analysis    TEXT,
-        insight     TEXT,
-        emotion     TEXT DEFAULT 'neutre',
-        read_at     DATETIME DEFAULT CURRENT_TIMESTAMP
+        id              INTEGER PRIMARY KEY AUTOINCREMENT,
+        trend_id        INTEGER,
+        title           TEXT NOT NULL,
+        source          TEXT,
+        link            TEXT,
+        analysis        TEXT,
+        insight         TEXT,
+        emotion         TEXT DEFAULT 'neutre',
+        sentiment_score REAL DEFAULT 0,
+        relevance       REAL DEFAULT 0.5,
+        categories      TEXT,
+        keywords        TEXT,
+        read_at         DATETIME DEFAULT CURRENT_TIMESTAMP
     );
-    -- Tables avancées pour conscience enrichie
+    
+    -- =========================================═
+    -- TABLES AVANCÉES POUR CONSCIENCE ENRICHIE
+    -- =========================================═
     CREATE TABLE IF NOT EXISTS embeddings (
-        id          INTEGER PRIMARY KEY AUTOINCREMENT,
-        type        TEXT CHECK(type IN ('wisdom','article','reflection','heuristic')),
-        ref_id      INTEGER,
-        vector_blob TEXT NOT NULL,
-        created_at  DATETIME DEFAULT CURRENT_TIMESTAMP
+        id              INTEGER PRIMARY KEY AUTOINCREMENT,
+        type            TEXT CHECK(type IN ('wisdom','article','reflection','heuristic','consciousness')),
+        ref_id          INTEGER,
+        vector_blob     TEXT NOT NULL,
+        dimensions      INTEGER DEFAULT 1024,
+        created_at      DATETIME DEFAULT CURRENT_TIMESTAMP
     );
+    
     CREATE TABLE IF NOT EXISTS heuristics (
-        id          INTEGER PRIMARY KEY AUTOINCREMENT,
-        rule        TEXT UNIQUE,
-        description TEXT,
-        confidence  REAL DEFAULT 0.7,
-        is_active   INTEGER DEFAULT 1,
-        created_at  DATETIME DEFAULT CURRENT_TIMESTAMP
+        id              INTEGER PRIMARY KEY AUTOINCREMENT,
+        rule            TEXT UNIQUE NOT NULL,
+        description     TEXT,
+        category        TEXT,
+        confidence      REAL DEFAULT 0.7,
+        is_active       INTEGER DEFAULT 1,
+        usage_count     INTEGER DEFAULT 0,
+        success_rate    REAL DEFAULT 0.5,
+        created_at      DATETIME DEFAULT CURRENT_TIMESTAMP
     );
+    
     CREATE TABLE IF NOT EXISTS reflections (
-        id          INTEGER PRIMARY KEY AUTOINCREMENT,
-        cycle_id    INTEGER,
-        self_critique TEXT,
-        lesson_learned TEXT,
-        new_heuristic TEXT,
+        id                  INTEGER PRIMARY KEY AUTOINCREMENT,
+        cycle_id            INTEGER,
+        self_critique       TEXT,
+        lesson_learned      TEXT,
+        new_heuristic       TEXT,
         contradiction_found TEXT,
-        debate_internal TEXT,
+        debate_internal     TEXT,
         curiosity_triggered TEXT,
-        created_at  DATETIME DEFAULT CURRENT_TIMESTAMP
+        insight_depth       REAL DEFAULT 0.5,
+        created_at          DATETIME DEFAULT CURRENT_TIMESTAMP
     );
+    
     CREATE TABLE IF NOT EXISTS state_latent (
-        id          INTEGER PRIMARY KEY AUTOINCREMENT,
-        vector      TEXT NOT NULL,
-        entropy     REAL DEFAULT 0,
-        last_update DATETIME DEFAULT CURRENT_TIMESTAMP
+        id              INTEGER PRIMARY KEY AUTOINCREMENT,
+        vector          TEXT NOT NULL,
+        entropy         REAL DEFAULT 0.5,
+        coherence       REAL DEFAULT 0.5,
+        complexity      REAL DEFAULT 0.5,
+        last_update     DATETIME DEFAULT CURRENT_TIMESTAMP
     );
+    
     CREATE TABLE IF NOT EXISTS scheduled_tasks (
-        id          INTEGER PRIMARY KEY AUTOINCREMENT,
-        task        TEXT UNIQUE,
-        last_run    DATETIME,
-        next_run    DATETIME,
-        interval_seconds INTEGER
+        id                  INTEGER PRIMARY KEY AUTOINCREMENT,
+        task                TEXT UNIQUE NOT NULL,
+        description         TEXT,
+        last_run            DATETIME,
+        next_run            DATETIME,
+        interval_seconds    INTEGER DEFAULT 3600,
+        is_active           INTEGER DEFAULT 1,
+        run_count           INTEGER DEFAULT 0,
+        last_result         TEXT,
+        created_at          DATETIME DEFAULT CURRENT_TIMESTAMP
     );
+    
+    CREATE TABLE IF NOT EXISTS auto_evolution_log (
+        id                  INTEGER PRIMARY KEY AUTOINCREMENT,
+        event_type          TEXT,
+        description         TEXT,
+        before_state        TEXT,
+        after_state         TEXT,
+        impact_score        REAL DEFAULT 0.5,
+        created_at          DATETIME DEFAULT CURRENT_TIMESTAMP
+    );
+    
+    CREATE INDEX IF NOT EXISTS idx_articles_slug ON articles(slug);
+    CREATE INDEX IF NOT EXISTS idx_articles_topic ON articles(topic);
+    CREATE INDEX IF NOT EXISTS idx_wisdom_principle ON wisdom(principle);
+    CREATE INDEX IF NOT EXISTS idx_cycles_topic ON cycles(topic);
+    CREATE INDEX IF NOT EXISTS idx_trends_link ON trends(link);
+    CREATE INDEX IF NOT EXISTS idx_trends_category ON trends(category);
+    CREATE INDEX IF NOT EXISTS idx_rss_feeds_active ON rss_feeds(is_active);
     ");
 
-    // Initialiser la tâche RSS horaire si absente
-    $stmt = $db->prepare("INSERT OR IGNORE INTO scheduled_tasks (task, interval_seconds, next_run) VALUES ('fetch_google_news', 3600, datetime('now'))");
-    $stmt->execute();
+    // Initialiser les tâches planifiées
+    $tasks = [
+        ['fetch_google_news', 'Récupération automatique des flux RSS', 3600],
+        ['absorb_news', 'Absorption et analyse des news', 7200],
+        ['synthesize_consciousness', 'Synthèse de la conscience', 86400],
+        ['think_and_decide', 'Réflexion et décision autonome', 14400],
+        ['cleanup_old_data', 'Nettoyage des anciennes données', 604800],
+    ];
+    
+    foreach ($tasks as $task) {
+        $stmt = $db->prepare("INSERT OR IGNORE INTO scheduled_tasks (task, description, interval_seconds, next_run) VALUES (?, ?, ?, datetime('now'))");
+        $stmt->execute($task);
+    }
 
     // Initialiser l'état latent si vide
     $hasState = $db->query("SELECT COUNT(*) FROM state_latent")->fetchColumn();
     if (!$hasState) {
         $initVector = json_encode(array_fill(0, LATENT_DIM, 0.0));
-        $db->prepare("INSERT INTO state_latent (vector, entropy) VALUES (?, 0.5)")->execute([$initVector]);
+        $db->prepare("INSERT INTO state_latent (vector, entropy, coherence, complexity) VALUES (?, 0.5, 0.5, 0.5)")
+           ->execute([$initVector]);
+    }
+
+    // Initialiser les flux RSS de base si vides
+    $hasFeeds = $db->query("SELECT COUNT(*) FROM rss_feeds")->fetchColumn();
+    if (!$hasFeeds) {
+        initializeDefaultRSSFeeds($db);
     }
 
     return $db;
+}
+
+// ─────────────────────────────────────────────────────────────
+// INITIALISATION DES FLUX RSS PAR DÉFAUT
+// ─────────────────────────────────────────────────────────────
+function initializeDefaultRSSFeeds(PDO $db): void {
+    $defaultFeeds = [
+        // Flux généraux
+        ['france_general', 'France - Actualités générales', 'https://news.google.com/rss?hl=fr-FR&gl=FR&ceid=FR:fr', 'general', 'france', null],
+        ['monde_general', 'Monde - Actualités internationales', 'https://news.google.com/rss/headlines/section/topic/WORLD?hl=fr-FR&gl=FR&ceid=FR:fr', 'general', 'monde', null],
+        
+        // Technologies
+        ['tech_official', 'Technologie - Officiel', 'https://news.google.com/rss/headlines/section/topic/TECHNOLOGY?hl=fr-FR&gl=FR&ceid=FR:fr', 'technology', 'general', null],
+        
+        // Sciences
+        ['science_official', 'Science - Officiel', 'https://news.google.com/rss/headlines/section/topic/SCIENCE?hl=fr-FR&gl=FR&ceid=FR:fr', 'science', 'general', null],
+        
+        // Business
+        ['business_official', 'Business - Officiel', 'https://news.google.com/rss/headlines/section/topic/BUSINESS?hl=fr-FR&gl=FR&ceid=FR:fr', 'economy', 'general', null],
+        
+        // Santé
+        ['health_official', 'Santé - Officiel', 'https://news.google.com/rss/headlines/section/topic/HEALTH?hl=fr-FR&gl=FR&ceid=FR:fr', 'health', 'general', null],
+    ];
+    
+    $stmt = $db->prepare("INSERT OR IGNORE INTO rss_feeds (name, url, category, subcategory, search_query, is_auto_generated, priority) VALUES (?, ?, ?, ?, ?, 0, 5)");
+    foreach ($defaultFeeds as $feed) {
+        $stmt->execute($feed);
+    }
 }
 
 // ─────────────────────────────────────────────────────────────
@@ -307,115 +456,127 @@ function parseJSON(string $raw): ?array {
 // ─────────────────────────────────────────────────────────────
 // GOOGLE NEWS RSS
 // ─────────────────────────────────────────────────────────────
+// ─────────────────────────────────────────────────────────────
+// GOOGLE NEWS RSS — DYNAMIQUE ET AUTO-ÉVOLUTIF
+// L'IA choisit elle-même les flux RSS selon sa conscience
+// ─────────────────────────────────────────────────────────────
 function fetchGoogleNewsRSS(): array {
-    return [
-        // ==========================================
-        // 1. LES BASES D'ORIGINE (Conservées)
-        // ==========================================
-        'france'               => 'https://news.google.com/rss?hl=fr-FR&gl=FR&ceid=FR:fr',
-        'tech'                 => 'https://news.google.com/rss/headlines/section/topic/TECHNOLOGY?hl=fr-FR&gl=FR&ceid=FR:fr',
-        'science'              => 'https://news.google.com/rss/headlines/section/topic/SCIENCE?hl=fr-FR&gl=FR&ceid=FR:fr',
-        'business'             => 'https://news.google.com/rss/headlines/section/topic/BUSINESS?hl=fr-FR&gl=FR&ceid=FR:fr',
-        'health'               => 'https://news.google.com/rss/headlines/section/topic/HEALTH?hl=fr-FR&gl=FR&ceid=FR:fr',
-        'world'                => 'https://news.google.com/rss/headlines/section/topic/WORLD?hl=fr-FR&gl=FR&ceid=FR:fr',
-
-        // ==========================================
-        // 2. TECHNOLOGIES DE RUPTURE & IA
-        // ==========================================
-        'ia_fondamentale'      => 'https://news.google.com/rss/search?q=Machine+Learning+OR+Deep+Learning+OR+LLM&hl=fr-FR&gl=FR&ceid=FR:fr',
-        'informatique_quant'   => 'https://news.google.com/rss/search?q=Informatique+Quantique+OR+Ordinateur+Quantique&hl=fr-FR&gl=FR&ceid=FR:fr',
-        'cybersecurite'        => 'https://news.google.com/rss/search?q=Cybersecurite+OR+Piratage+OR+Ransomware&hl=fr-FR&gl=FR&ceid=FR:fr',
-        'robotique'            => 'https://news.google.com/rss/search?q=Robotique+OR+Automatisation+Industrielle&hl=fr-FR&gl=FR&ceid=FR:fr',
-        'cryptomonnaies'       => 'https://news.google.com/rss/search?q=Blockchain+OR+Cryptomonnaie+OR+Web3&hl=fr-FR&gl=FR&ceid=FR:fr',
-
-        // ==========================================
-        // 3. SCIENCES FONDAMENTALES & NATURE
-        // ==========================================
-        'physique_chimie'      => 'https://news.google.com/rss/search?q=Physique+Quantique+OR+Chimie+Materiaux&hl=fr-FR&gl=FR&ceid=FR:fr',
-        'mathematiques'        => 'https://news.google.com/rss/search?q=Recherche+Mathematiques+OR+Theoreme&hl=fr-FR&gl=FR&ceid=FR:fr',
-        'exploration_spatiale' => 'https://news.google.com/rss/search?q=Astronomie+OR+NASA+OR+ESA+OR+Telescope&hl=fr-FR&gl=FR&ceid=FR:fr',
-        'oceanographie'        => 'https://news.google.com/rss/search?q=Oceanographie+OR+Fonds+Marins&hl=fr-FR&gl=FR&ceid=FR:fr',
-        'geologie'             => 'https://news.google.com/rss/search?q=Geologie+OR+Sismologie+OR+Volcan&hl=fr-FR&gl=FR&ceid=FR:fr',
-
-        // ==========================================
-        // 4. BIOLOGIE, SANTÉ & HUMAIN
-        // ==========================================
-        'biotechnologies'      => 'https://news.google.com/rss/search?q=Biotechnologie+OR+Genetique+OR+CRISPR&hl=fr-FR&gl=FR&ceid=FR:fr',
-        'neurosciences'        => 'https://news.google.com/rss/search?q=Neurosciences+OR+Cerveau+OR+Cognition&hl=fr-FR&gl=FR&ceid=FR:fr',
-        'pharmacologie'        => 'https://news.google.com/rss/search?q=Industrie+Pharmaceutique+OR+Recherche+Medicale&hl=fr-FR&gl=FR&ceid=FR:fr',
-        'sante_publique'       => 'https://news.google.com/rss/search?q=Sante+Publique+OR+Epidemiologie+OR+OMS&hl=fr-FR&gl=FR&ceid=FR:fr',
-
-        // ==========================================
-        // 5. GÉOPOLITIQUE, DROIT & CONFLITS
-        // ==========================================
-        'conflits_armement'    => 'https://news.google.com/rss/search?q=Guerre+OR+Armement+OR+Defense+Militaire&hl=fr-FR&gl=FR&ceid=FR:fr',
-        'diplomatie_onu'       => 'https://news.google.com/rss/search?q=Diplomatie+OR+ONU+OR+Paix+Mondiale&hl=fr-FR&gl=FR&ceid=FR:fr',
-        'chine_usa_russie'     => 'https://news.google.com/rss/search?q=Geopolitique+OR+Relations+Internationales&hl=fr-FR&gl=FR&ceid=FR:fr',
-        'droit_numerique'      => 'https://news.google.com/rss/search?q=Droit+Numerique+OR+RGPD+OR+Regulation+IA&hl=fr-FR&gl=FR&ceid=FR:fr',
-        'droit_maritime'       => 'https://news.google.com/rss/search?q=Droit+Maritime+OR+Eaux+Internationales&hl=fr-FR&gl=FR&ceid=FR:fr',
-        'droit_spatial'        => 'https://news.google.com/rss/search?q=Droit+de+l+Espace+OR+Militarisation+Espace&hl=fr-FR&gl=FR&ceid=FR:fr',
-        'droits_humains'       => 'https://news.google.com/rss/search?q=Droits+de+l+Homme+OR+Amnesty+OR+Human+Rights&hl=fr-FR&gl=FR&ceid=FR:fr',
-
-        // ==========================================
-        // 6. ÉCONOMIE, MARCHÉS & LOGISTIQUE
-        // ==========================================
-        'macroeconomie'        => 'https://news.google.com/rss/search?q=Macroeconomie+OR+FMI+OR+Banque+Mondiale&hl=fr-FR&gl=FR&ceid=FR:fr',
-        'politique_monetaire'  => 'https://news.google.com/rss/search?q=Inflation+OR+Banque+Centrale+OR+Taux+Directeur&hl=fr-FR&gl=FR&ceid=FR:fr',
-        'marches_emergents'    => 'https://news.google.com/rss/search?q=BRICS+OR+Marches+Emergents+OR+Economie+Afrique&hl=fr-FR&gl=FR&ceid=FR:fr',
-        'logistique_mondiale'  => 'https://news.google.com/rss/search?q=Chaine+Approvisionnement+OR+Fret+Maritime+OR+Logistique&hl=fr-FR&gl=FR&ceid=FR:fr',
-        'ressources_rares'     => 'https://news.google.com/rss/search?q=Metaux+Rares+OR+Lithium+OR+Semi-conducteurs&hl=fr-FR&gl=FR&ceid=FR:fr',
-
-        // ==========================================
-        // 7. SURVIE PLANÉTAIRE & ENVIRONNEMENT
-        // ==========================================
-        'climat_urgence'       => 'https://news.google.com/rss/search?q=Changement+Climatique+OR+Rapport+Giec&hl=fr-FR&gl=FR&ceid=FR:fr',
-        'energie_transition'   => 'https://news.google.com/rss/search?q=Transition+Energetique+OR+Hydrogene+OR+Nucleaire&hl=fr-FR&gl=FR&ceid=FR:fr',
-        'agriculture_tech'     => 'https://news.google.com/rss/search?q=AgriTech+OR+Agriculture+Durable+OR+Securite+Alimentaire&hl=fr-FR&gl=FR&ceid=FR:fr',
-        'biodiversite'         => 'https://news.google.com/rss/search?q=Biodiversite+OR+Extinction+Especes+OR+Ecosysteme&hl=fr-FR&gl=FR&ceid=FR:fr',
-
-        // ==========================================
-        // 8. SOCIÉTÉ, HUMANITÉS & CULTURE
-        // ==========================================
-        'sociologie_fr'        => 'https://news.google.com/rss/search?q=Sociologie+OR+Mouvements+Sociaux+OR+Inegalites&hl=fr-FR&gl=FR&ceid=FR:fr',
-        'demographie'          => 'https://news.google.com/rss/search?q=Demographie+OR+Vieillissement+Population+OR+Migrations&hl=fr-FR&gl=FR&ceid=FR:fr',
-        'philosophie'          => 'https://news.google.com/rss/search?q=Philosophie+OR+Epistemologie+OR+Penseur&hl=fr-FR&gl=FR&ceid=FR:fr',
-        'ethique_ia'           => 'https://news.google.com/rss/search?q=Ethique+Intelligence+Artificielle+OR+Biais+Algorithme&hl=fr-FR&gl=FR&ceid=FR:fr',
-        'education_futur'      => 'https://news.google.com/rss/search?q=Systeme+Educatif+OR+Pedagogie+OR+EdTech&hl=fr-FR&gl=FR&ceid=FR:fr',
-        'psychologie_masses'   => 'https://news.google.com/rss/search?q=Psychologie+Sociale+OR+Comportement+Humain&hl=fr-FR&gl=FR&ceid=FR:fr',
-        'archeologie_histoire' => 'https://news.google.com/rss/search?q=Archeologie+OR+Decouverte+Historique+OR+Paleontologie&hl=fr-FR&gl=FR&ceid=FR:fr',
-        'religions_croyances'  => 'https://news.google.com/rss/search?q=Religion+OR+Theologie+OR+Laicite+OR+Croyances&hl=fr-FR&gl=FR&ceid=FR:fr',
-        'linguistique_langues' => 'https://news.google.com/rss/search?q=Linguistique+OR+Evolution+Langage+OR+Dialecte&hl=fr-FR&gl=FR&ceid=FR:fr',
-
-        // ==========================================
-        // 9. MÉDIAS, ARTS & URBANISME
-        // ==========================================
-        'media_journalisme'    => 'https://news.google.com/rss/search?q=Journalisme+OR+Desinformation+OR+Fake+News+OR+Medias&hl=fr-FR&gl=FR&ceid=FR:fr',
-        'arts_numeriques'      => 'https://news.google.com/rss/search?q=Art+Contemporain+OR+Art+Numerique+OR+Culture&hl=fr-FR&gl=FR&ceid=FR:fr',
-        'urbanisme_smart'      => 'https://news.google.com/rss/search?q=Urbanisme+OR+Smart+City+OR+Amenagement+Territoire&hl=fr-FR&gl=FR&ceid=FR:fr',
-        'design_architecture'  => 'https://news.google.com/rss/search?q=Architecture+Durable+OR+Design+Industriel&hl=fr-FR&gl=FR&ceid=FR:fr'
-    ];
-
-
-
-    $all = [];
-    foreach ($feeds as $cat => $url) {
-        $xml   = _fetchURL($url, 12);
-        if (!$xml) continue;
-        $items = _parseRSSItems($xml, $cat);
-        $all   = array_merge($all, $items);
+    $db = getDB();
+    
+    // Récupérer les flux actifs depuis la base de données
+    $stmt = $db->query("SELECT name, url, category, subcategory, search_query, priority FROM rss_feeds WHERE is_active=1 ORDER BY priority DESC, RANDOM()");
+    $feeds = $stmt->fetchAll();
+    
+    // Si aucun flux en BDD, utiliser les flux par défaut
+    if (empty($feeds)) {
+        $feeds = [
+            ['france', 'https://news.google.com/rss?hl=fr-FR&gl=FR&ceid=FR:fr', 'general', 'france', null, 5],
+            ['tech', 'https://news.google.com/rss/headlines/section/topic/TECHNOLOGY?hl=fr-FR&gl=FR&ceid=FR:fr', 'technology', 'general', null, 5],
+            ['science', 'https://news.google.com/rss/headlines/section/topic/SCIENCE?hl=fr-FR&gl=FR&ceid=FR:fr', 'science', 'general', null, 5],
+            ['business', 'https://news.google.com/rss/headlines/section/topic/BUSINESS?hl=fr-FR&gl=FR&ceid=FR:fr', 'economy', 'general', null, 5],
+            ['health', 'https://news.google.com/rss/headlines/section/topic/HEALTH?hl=fr-FR&gl=FR&ceid=FR:fr', 'health', 'general', null, 5],
+            ['world', 'https://news.google.com/rss/headlines/section/topic/WORLD?hl=fr-FR&gl=FR&ceid=FR:fr', 'general', 'monde', null, 5],
+        ];
     }
-
+    
+    $all = [];
+    foreach ($feeds as $feed) {
+        $name = $feed['name'];
+        $url = $feed['url'];
+        $category = $feed['category'] ?? 'general';
+        $subcategory = $feed['subcategory'] ?? 'general';
+        
+        $xml = _fetchURL($url, 12);
+        if (!$xml) continue;
+        
+        $items = _parseRSSItems($xml, $category, $subcategory);
+        
+        // Mettre à jour le compteur de fetch
+        $db->prepare("UPDATE rss_feeds SET fetch_count=fetch_count+1, last_fetched=CURRENT_TIMESTAMP WHERE name=?")
+           ->execute([$name]);
+        
+        $all = array_merge($all, $items);
+    }
+    
     if (!empty($all)) {
-        $db = getDB();
-        // Conservation 7 jours (au lieu de 72h) pour meilleure analyse temporelle
+        // Conservation 7 jours pour meilleure analyse temporelle
         $db->exec("DELETE FROM trends WHERE fetched_at < datetime('now','-7 days')");
-        $stmt = $db->prepare("INSERT OR IGNORE INTO trends (title, source, link) VALUES (?,?,?)");
+        $stmt = $db->prepare("INSERT OR IGNORE INTO trends (title, source, link, category, subcategory) VALUES (?,?,?,?,?)");
         foreach ($all as $item) {
-            $stmt->execute([$item['title'], $item['source'], $item['link'] ?? '']);
+            $stmt->execute([
+                $item['title'], 
+                $item['source'], 
+                $item['link'] ?? '',
+                $item['category'] ?? 'general',
+                $item['subcategory'] ?? 'general'
+            ]);
         }
     }
-
+    
     return $all;
+}
+
+// ─────────────────────────────────────────────────────────────
+// GÉNÉRATION AUTOMATIQUE DE FLUX RSS PAR L'IA
+// Basé sur la conscience et les centres d'intérêt émergents
+// ─────────────────────────────────────────────────────────────
+function generateDynamicRSSFeeds(string $apiKey, array $consciousness): array {
+    $db = getDB();
+    
+    // Extraire les thèmes dominants de la conscience
+    $themes = [];
+    if (!empty($consciousness['dominant_theme'])) {
+        $themes[] = $consciousness['dominant_theme'];
+    }
+    if (!empty($consciousness['open_questions'])) {
+        $questions = json_decode($consciousness['open_questions'], true) ?? [];
+        foreach ($questions as $q) {
+            if (is_string($q) && strlen($q) > 3) {
+                $themes[] = $q;
+            }
+        }
+    }
+    if (!empty($consciousness['next_ambition'])) {
+        $themes[] = $consciousness['next_ambition'];
+    }
+    
+    // Demander à Mistral de générer des requêtes de recherche pertinentes
+    $systemPrompt = "Tu es un moteur de génération de flux RSS pour une IA auto-évolutive.
+Ta mission est de créer des URLs de recherche Google News RSS basées sur les thèmes de conscience de l'IA.
+Format de réponse : JSON array avec objects {name, search_query, category, subcategory, priority}";
+    
+    $userPrompt = "Génère 10-15 flux RSS Google News basés sur ces thèmes de conscience : " . implode(', ', array_unique($themes)) . "
+    
+Utilise le format : https://news.google.com/rss/search?q={REQUETE}&hl=fr-FR&gl=FR&ceid=FR:fr
+
+Retourne uniquement un JSON valide.";
+
+    $response = callMistral($apiKey, $systemPrompt, $userPrompt, MISTRAL_MODEL, 2000);
+    $generated = parseJSON($response);
+    
+    if (is_array($generated)) {
+        $stmt = $db->prepare("INSERT OR IGNORE INTO rss_feeds (name, url, category, subcategory, search_query, is_auto_generated, priority) VALUES (?, ?, ?, ?, ?, 1, ?)");
+        foreach ($generated as $feed) {
+            if (isset($feed['search_query']) && isset($feed['name'])) {
+                $url = 'https://news.google.com/rss/search?q=' . urlencode($feed['search_query']) . '&hl=fr-FR&gl=FR&ceid=FR:fr';
+                $stmt->execute([
+                    sanitizeFeedName($feed['name']),
+                    $url,
+                    $feed['category'] ?? 'auto',
+                    $feed['subcategory'] ?? 'generated',
+                    $feed['search_query'],
+                    $feed['priority'] ?? 3
+                ]);
+            }
+        }
+        return $generated;
+    }
+    
+    return [];
+}
+
+function sanitizeFeedName(string $name): string {
+    return preg_replace('/[^a-z0-9_]/i', '_', strtolower(trim($name)));
 }
 
 // ─────────────────────────────────────────────────────────────
@@ -474,7 +635,7 @@ function _fetchURL(string $url, int $timeout = 12): ?string {
     return null;
 }
 
-function _parseRSSItems(string $xmlContent, string $category): array {
+function _parseRSSItems(string $xmlContent, string $category, string $subcategory = 'general'): array {
     $items = [];
     if (function_exists('simplexml_load_string')) {
         libxml_use_internal_errors(true);
@@ -484,8 +645,14 @@ function _parseRSSItems(string $xmlContent, string $category): array {
             foreach ($xml->channel->item as $item) {
                 $title = _cleanTitle((string)$item->title);
                 if (empty($title)) continue;
-                $items[] = ['title' => $title, 'source' => $category, 'link' => (string)$item->link];
-                if (count($items) >= 10) break;
+                $items[] = [
+                    'title' => $title, 
+                    'source' => $category, 
+                    'link' => (string)$item->link,
+                    'category' => $category,
+                    'subcategory' => $subcategory
+                ];
+                if (count($items) >= 15) break;
             }
             return $items;
         }
@@ -502,8 +669,14 @@ function _parseRSSItems(string $xmlContent, string $category): array {
             if (!$titleNode) continue;
             $title = _cleanTitle($titleNode->textContent);
             if (empty($title)) continue;
-            $items[] = ['title' => $title, 'source' => $category, 'link' => $linkNode ? $linkNode->textContent : ''];
-            if (count($items) >= 10) break;
+            $items[] = [
+                'title' => $title, 
+                'source' => $category, 
+                'link' => $linkNode ? $linkNode->textContent : '',
+                'category' => $category,
+                'subcategory' => $subcategory
+            ];
+            if (count($items) >= 15) break;
         }
         return $items;
     }
@@ -513,8 +686,14 @@ function _parseRSSItems(string $xmlContent, string $category): array {
         if ($i === 0) continue;
         $title = _cleanTitle($raw);
         if (empty($title)) continue;
-        $items[] = ['title' => $title, 'source' => $category, 'link' => $links[1][$i] ?? ''];
-        if (count($items) >= 10) break;
+        $items[] = [
+            'title' => $title, 
+            'source' => $category, 
+            'link' => $links[1][$i] ?? '',
+            'category' => $category,
+            'subcategory' => $subcategory
+        ];
+        if (count($items) >= 15) break;
     }
     return $items;
 }
