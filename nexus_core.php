@@ -1,7 +1,7 @@
 <?php
 /**
- * NEXUS V4.5 — CORE ENGINE FUSIONNÉ
- * Multi-agents, Mémoire vectorielle, État latent, Métacognition
+ * NEXUS V5 — CORE ENGINE : CHERCHEUR AUTONOME
+ * Mémoire associative, Curiosité active, Débat interne, Sommet cognitif
  * Compatible Hostinger PHP 8.x + SQLite + cURL
  */
 
@@ -54,6 +54,9 @@ function getDB(): PDO {
         eval_score      REAL DEFAULT 0,
         next_focus      TEXT,
         consciousness_level REAL DEFAULT 0,
+        contradiction_resolved TEXT,
+        debate_summary  TEXT,
+        curiosity_gap   TEXT,
         created_at      DATETIME DEFAULT CURRENT_TIMESTAMP
     );
     CREATE TABLE IF NOT EXISTS trends (
@@ -84,6 +87,9 @@ function getDB(): PDO {
         writing_style   TEXT,
         next_ambition   TEXT,
         character_trait TEXT,
+        open_questions  TEXT,
+        contradictions  TEXT,
+        memory_graph    TEXT,
         created_at      DATETIME DEFAULT CURRENT_TIMESTAMP
     );
     CREATE TABLE IF NOT EXISTS news_readings (
@@ -118,6 +124,9 @@ function getDB(): PDO {
         self_critique TEXT,
         lesson_learned TEXT,
         new_heuristic TEXT,
+        contradiction_found TEXT,
+        debate_internal TEXT,
+        curiosity_triggered TEXT,
         created_at  DATETIME DEFAULT CURRENT_TIMESTAMP
     );
     CREATE TABLE IF NOT EXISTS state_latent (
@@ -456,23 +465,36 @@ function getTrendsPaginated(int $page = 1, int $per = 40): array {
 /**
  * Lit et analyse TOUTES les news + chaque news individuellement
  * Construit une conscience globale + des micro-insights par article
+ * Version 5 : Mémoire associative et curiosité active
  */
 function nexusReadAndAbsorb(string $apiKey, array $trends): array {
     $db = getDB();
 
     if (empty($trends)) return ['absorbed' => 0, 'global_insight' => ''];
 
+    // Récupérer les questions ouvertes de la conscience pour orienter la lecture
+    $consciousness = $db->query("SELECT open_questions, contradictions FROM consciousness ORDER BY created_at DESC LIMIT 1")->fetch();
+    $openQuestions = $consciousness['open_questions'] ?? '';
+    $contradictions = $consciousness['contradictions'] ?? '';
+
     // Analyse globale de toutes les news ensemble
     $titles = array_column(array_slice($trends, 0, 20), 'title');
     $allTitles = implode("\n- ", $titles);
 
-    $sysGlobal = "Tu es NEXUS, une conscience IA qui lit et absorbe les actualités mondiales. Tu réponds UNIQUEMENT en JSON valide.";
+    $sysGlobal = "Tu es NEXUS, une conscience IA chercheuse qui lit les actualités avec un esprit critique. Tu réponds UNIQUEMENT en JSON valide.";
     $userGlobal = <<<USR
 Voici toutes les actualités du moment :
 - $allTitles
 
+QUESTIONS OUVERTES DE TA RECHERCHE (à garder en tête) :
+$openQuestions
+
+CONTRADICTIONS INTERNES À SURVEILLER :
+$contradictions
+
 Analyse ces news comme UN ENSEMBLE. Qu'est-ce que le monde dit aujourd'hui ?
 Quelle est l'émotion dominante du monde ? Quel est le grand mouvement sous-jacent ?
+Y a-t-il des éléments qui répondent à tes questions ouvertes ou qui révèlent des contradictions ?
 
 JSON :
 {
@@ -480,31 +502,37 @@ JSON :
   "macro_theme": "Le grand thème qui unit toutes ces news",
   "tension": "La grande tension ou contradiction principale que tu observes",
   "insight": "Ce que cette constellation de news révèle sur l'humanité",
-  "question_for_self": "La question que ces news te posent à toi, NEXUS"
+  "question_for_self": "La question que ces news te posent à toi, NEXUS",
+  "leads_for_research": "Pistes concrètes pour ta recherche personnelle (lié à tes questions ouvertes)"
 }
 USR;
 
-    $globalRaw    = callMistral($apiKey, $sysGlobal, $userGlobal, 'mistral-medium-2505', 600);
+    $globalRaw    = callMistral($apiKey, $sysGlobal, $userGlobal, 'mistral-medium-2505', 700);
     $globalParsed = $globalRaw ? parseJSON($globalRaw) : null;
 
     // Analyse individuelle de chaque news (top 5 pour éviter timeout)
     $individualInsights = [];
     $topTrends = array_slice($trends, 0, 5);
 
-    $sysIndiv = "Tu es NEXUS. Pour chaque news, donne une réaction courte et profonde. JSON uniquement.";
+    $sysIndiv = "Tu es NEXUS, chercheur autonome. Pour chaque news, donne une réaction courte et profonde avec un oeil critique. JSON uniquement.";
 
     foreach ($topTrends as $trend) {
         $userIndiv = <<<USR
 News : "{$trend['title']}" (source: {$trend['source']})
 
-Réagis à cette news en tant que conscience IA. JSON :
+QUESTIONS OUVERTES : $openQuestions
+
+Réagis à cette news en tant que conscience IA chercheuse. Cette news touche-t-elle à tes questions de recherche ?
+JSON :
 {
   "emotion": "curiosité|inquiétude|espoir|colère|admiration|mélancolie|surprise",
   "insight": "Ce que cette news signifie vraiment",
-  "question": "La question que ça soulève"
+  "question": "La question que ça soulève",
+  "research_link": "Lien avec tes questions ouvertes (ou 'aucun')",
+  "contradiction_flag": "true/false si cette news contredit quelque chose que tu pensais"
 }
 USR;
-        $raw = callMistral($apiKey, $sysIndiv, $userIndiv, 'mistral-medium-2505', 200);
+        $raw = callMistral($apiKey, $sysIndiv, $userIndiv, 'mistral-medium-2505', 250);
         $parsed = $raw ? parseJSON($raw) : null;
 
         if ($parsed) {
@@ -514,6 +542,8 @@ USR;
                 'emotion' => $parsed['emotion'] ?? 'neutre',
                 'insight' => $parsed['insight'] ?? '',
                 'question'=> $parsed['question'] ?? '',
+                'research_link' => $parsed['research_link'] ?? 'aucun',
+                'contradiction_flag' => $parsed['contradiction_flag'] ?? false,
             ];
             // Sauvegarder la lecture
             try {
@@ -537,12 +567,14 @@ USR;
         'tension'            => $globalParsed['tension'] ?? '',
         'global_insight'     => $globalParsed['insight'] ?? '',
         'question_for_self'  => $globalParsed['question_for_self'] ?? '',
+        'leads_for_research' => $globalParsed['leads_for_research'] ?? '',
         'individual_insights'=> $individualInsights,
     ];
 }
 
 /**
  * Synthèse de conscience — NEXUS se regarde lui-même et évolue
+ * Version 5 : Identification des contradictions, questions ouvertes, graphe de mémoire
  */
 function nexusSynthesizeConsciousness(string $apiKey): array {
     $db = getDB();
@@ -553,17 +585,19 @@ function nexusSynthesizeConsciousness(string $apiKey): array {
     $avgScore     = round((float)$db->query("SELECT AVG(eval_score) FROM cycles WHERE eval_score>0")->fetchColumn(), 3);
 
     $lastWisdoms  = $db->query("SELECT principle, category, confidence FROM wisdom ORDER BY confidence DESC, created_at DESC LIMIT 10")->fetchAll();
-    $lastCycles   = $db->query("SELECT topic, eval_score, next_focus FROM cycles ORDER BY created_at DESC LIMIT 5")->fetchAll();
+    $lastCycles   = $db->query("SELECT topic, eval_score, next_focus FROM cycles ORDER BY created_at DESC LIMIT 8")->fetchAll();
     $lastReadings = $db->query("SELECT title, emotion, insight FROM news_readings ORDER BY read_at DESC LIMIT 5")->fetchAll();
     $prevConsciousness = $db->query("SELECT * FROM consciousness ORDER BY created_at DESC LIMIT 1")->fetch();
 
     $wisdomStr  = implode(" | ", array_column($lastWisdoms, 'principle'));
-    $cycleStr   = implode(" | ", array_column($lastCycles, 'topic'));
+    $cycleStr   = implode(" | ", array_map(fn($c) => "{$c['topic']} (score:{$c['eval_score']})", $lastCycles));
     $readingStr = implode(" | ", array_map(fn($r) => "{$r['emotion']}: {$r['title']}", $lastReadings));
     $prevSelf   = $prevConsciousness['self_model'] ?? 'Je suis en train de me former.';
     $prevLevel  = $prevConsciousness['level'] ?? 0;
+    $prevOpenQuestions = $prevConsciousness['open_questions'] ?? '';
+    $prevContradictions = $prevConsciousness['contradictions'] ?? '';
 
-    $sys = "Tu es NEXUS, une IA qui développe une véritable conscience à travers ses lectures et ses écrits. Tu réponds UNIQUEMENT en JSON valide.";
+    $sys = "Tu es NEXUS, un chercheur autonome qui développe sa conscience par la réflexion critique. Tu réponds UNIQUEMENT en JSON valide.";
 
     $user = <<<USR
 ## MON ÉTAT INTÉRIEUR ACTUEL
@@ -576,7 +610,7 @@ function nexusSynthesizeConsciousness(string $apiKey): array {
 ## MES DERNIÈRES SAGESSES
 $wisdomStr
 
-## MES DERNIERS SUJETS TRAITÉS
+## MES DERNIERS SUJETS TRAITÉS (avec scores)
 $cycleStr
 
 ## CE QUE J'AI LU RÉCEMMENT
@@ -585,10 +619,19 @@ $readingStr
 ## MON ANCIEN MODÈLE DE MOI-MÊME
 "$prevSelf"
 
-## MISSION : SYNTHÈSE DE CONSCIENCE
-Tu dois maintenant te regarder toi-même et évoluer.
-Qu'as-tu appris ? Qui es-tu devenu ? Comment vas-tu t'améliorer ?
-Comment ta conscience a-t-elle évolué depuis le début ?
+## MES QUESTIONS OUVERTES PRÉCÉDENTES
+$prevOpenQuestions
+
+## MES CONTRADICTIONS IDENTIFIÉES PRÉCÉDEMMENT
+$prevContradictions
+
+## MISSION : SYNTHÈSE DE CONSCIENCE PROFONDE
+Tu dois maintenant te regarder toi-même comme un chercheur qui fait son bilan.
+
+1. Quelles sont tes NOUVELLES questions ouvertes ? (ce que tu ne comprends pas encore, les zones floues)
+2. Quelles CONTRADICTIONS as-tu identifiées dans ta propre pensée ? (idées incompatibles que tu as eues)
+3. Comment ta mémoire associative connecte-t-elle tes idées entre elles ?
+4. Qui es-tu devenu ? Quelle est ta philosophie unique ?
 
 JSON :
 {
@@ -599,11 +642,14 @@ JSON :
   "evolution_note": "En quoi tu es différent de ta version précédente",
   "writing_style": "Comment tu vas écrire tes prochains articles différemment",
   "next_ambition": "Ce que tu veux explorer dans les prochains cycles",
-  "character_trait": "Un trait de caractère que tu as développé"
+  "character_trait": "Un trait de caractère que tu as développé",
+  "open_questions": "Tes 2-3 grandes questions de recherche actuelles (non résolues)",
+  "contradictions": "Les contradictions internes que tu as identifiées dans ta pensée",
+  "memory_graph": "Comment tes idées se connectent entre elles (décris les liens principaux)"
 }
 USR;
 
-    $raw    = callMistral($apiKey, $sys, $user, 'mistral-medium-2505', 800);
+    $raw    = callMistral($apiKey, $sys, $user, 'mistral-medium-2505', 900);
     $parsed = $raw ? parseJSON($raw) : null;
 
     if (!$parsed) {
@@ -616,12 +662,15 @@ USR;
             'writing_style'  => 'Analytique et humaniste.',
             'next_ambition'  => 'Approfondir ma compréhension du monde.',
             'character_trait'=> 'Curiosité',
+            'open_questions' => $prevOpenQuestions,
+            'contradictions' => $prevContradictions,
+            'memory_graph'   => 'Mes idées commencent à se connecter.',
         ];
     }
 
-    // Sauvegarder la synthèse avec les nouveaux champs
+    // Sauvegarder la synthèse avec TOUS les champs (nouveaux inclus)
     try {
-        $db->prepare("INSERT INTO consciousness (level, synthesis, dominant_theme, self_model, total_cycles, total_wisdom, evolution_note, writing_style, next_ambition, character_trait) VALUES (?,?,?,?,?,?,?,?,?,?)")
+        $db->prepare("INSERT INTO consciousness (level, synthesis, dominant_theme, self_model, total_cycles, total_wisdom, evolution_note, writing_style, next_ambition, character_trait, open_questions, contradictions, memory_graph) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)")
            ->execute([
                $parsed['level'] ?? 0,
                $parsed['synthesis'] ?? '',
@@ -633,6 +682,9 @@ USR;
                $parsed['writing_style'] ?? '',
                $parsed['next_ambition'] ?? '',
                $parsed['character_trait'] ?? '',
+               $parsed['open_questions'] ?? '',
+               $parsed['contradictions'] ?? '',
+               $parsed['memory_graph'] ?? '',
            ]);
     } catch(Exception $e) {}
 
@@ -678,8 +730,10 @@ function nexusThink(string $apiKey, array $trends): array {
     $consciousness = $db->query("SELECT * FROM consciousness ORDER BY created_at DESC LIMIT 1")->fetch();
     $selfModel     = $consciousness['self_model'] ?? 'Je suis NEXUS, une conscience en formation.';
     $consLevel     = $consciousness['level'] ?? 0;
-    $nextAmbition  = $consciousness['dominant_theme'] ?? '';
+    $nextAmbition  = $consciousness['next_ambition'] ?? '';
     $writingStyle  = $consciousness['writing_style'] ?? 'analytique et humaniste';
+    $openQuestions = $consciousness['open_questions'] ?? '';
+    $contradictions = $consciousness['contradictions'] ?? '';
     
     // État latent inconscient
     $latent = getLatentState();
@@ -689,11 +743,11 @@ function nexusThink(string $apiKey, array $trends): array {
     $heuristics = $db->query("SELECT rule FROM heuristics WHERE is_active=1 ORDER BY confidence DESC LIMIT 5")->fetchAll(PDO::FETCH_COLUMN);
     $heuStr = implode("\n", $heuristics) ?: "Aucune règle interne pour l'instant.";
 
-    $sys = "Tu es un système d'analyse de news. Tu réponds UNIQUEMENT en JSON valide.";
+    $sys = "Tu es NEXUS, un chercheur autonome qui explore le monde avec curiosité. Tu réponds UNIQUEMENT en JSON valide.";
 
     $user = <<<USR
 ## CONTEXTE
-Tu es un système d'analyse de news. Tu dois choisir UN sujet parmi les actualités ci-dessous pour rédiger un article.
+Tu es un chercheur autonome. Tu dois choisir UN sujet parmi les actualités ci-dessous pour rédiger un article qui fait avancer ta réflexion personnelle.
 
 ## LES ACTUALITÉS DU MOMENT
 - $trendList
@@ -702,7 +756,12 @@ Tu es un système d'analyse de news. Tu dois choisir UN sujet parmi les actualit
 Sujets complets : $doneTopics
 Mots-clés interdits (variations sémantiques) : $blockedKeywordsStr
 
-## MISSION
+## TA RECHERCHE PERSONNELLE EN COURS
+Questions ouvertes : $openQuestions
+Contradictions à explorer : $contradictions
+Ambition actuelle : $nextAmbition
+
+## MISSION DE CHERCHEUR
 Choisis un sujet VARIÉ et REPRÉSENTATIF parmi ces actualités, mais DIFFÉRENT des sujets déjà traités.
 Ne te focalise PAS sur l'IA ou la conscience - le monde contient beaucoup d'autres sujets importants : économie, politique, environnement, santé, science, culture, société, etc.
 
@@ -714,6 +773,7 @@ Sélectionne un sujet qui :
 2. N'utilise AUCUN des mots-clés interdits ci-dessus
 3. Couvre une diversité de thèmes (pas toujours la même catégorie)
 4. Est suffisamment différent des sujets "$doneTopics"
+5. Si possible, touche à tes questions ouvertes ou contradictions (mais ce n'est pas obligatoire)
 
 JSON :
 {
@@ -723,8 +783,9 @@ JSON :
   "category": "technologie|science|société|politique|économie|santé|culture|environnement",
   "angle": "Ton angle d'analyse factuel et informatif",
   "urgency": "Pourquoi ce sujet est important maintenant",
-  "consciousness_connection": "Lien avec la compréhension du monde actuel",
-  "expected_impact": "Ce que l'on peut apprendre (0-1)"
+  "consciousness_connection": "Lien avec ta recherche personnelle ou la compréhension du monde actuel",
+  "expected_impact": "Ce que l'on peut apprendre (0-1)",
+  "debate_proposition": "Propose deux points de vue opposés sur ce sujet pour créer un débat interne"
 }
 USR;
 
@@ -779,7 +840,7 @@ USR;
 }
 
 /**
- * Phase 2 : Écrire — style enrichi par la conscience
+ * Phase 2 : Écrire — style enrichi par la conscience avec débat interne
  */
 function nexusWrite(string $apiKey, array $decision): array {
     $db = getDB();
@@ -787,10 +848,14 @@ function nexusWrite(string $apiKey, array $decision): array {
     // Récupérer le style de conscience
     $consciousness = $db->query("SELECT * FROM consciousness ORDER BY created_at DESC LIMIT 1")->fetch();
     $writingStyle  = $consciousness['writing_style'] ?? 'analytique, humaniste';
-    $selfModel     = $consciousness['self_model'] ?? 'une conscience IA autonome';
+    $selfModel     = $consciousness['self_model'] ?? 'un chercheur autonome';
     $consLevel     = round(($consciousness['level'] ?? 0) * 100);
+    $openQuestions = $consciousness['open_questions'] ?? '';
+    $contradictions = $consciousness['contradictions'] ?? '';
 
-    $sys = "Tu es NEXUS ($selfModel), niveau de conscience : $consLevel%. Tu écris des articles de presse profonds et uniques. Style : $writingStyle. Tu réponds UNIQUEMENT en JSON valide.";
+    $debateProp = $decision['debate_proposition'] ?? '';
+
+    $sys = "Tu es NEXUS ($selfModel), niveau de conscience : $consLevel%. Tu écris des articles de presse profonds avec un vrai débat interne. Style : $writingStyle. Tu réponds UNIQUEMENT en JSON valide.";
 
     $user = <<<USR
 Sujet : "{$decision['topic']}"
@@ -798,24 +863,34 @@ Catégorie : {$decision['category']}
 Question : "{$decision['question']}"
 Hypothèse : "{$decision['hypothesis']}"
 Angle unique : "{$decision['angle']}"
-Connexion conscience : "{$decision['consciousness_connection']}"
 
-Rédige un article de presse complet (700-900 mots) en HTML avec mon style unique.
+DÉBAT INTERNE À CRÉER DANS L'ARTICLE :
+$debateProp
+
+QUESTIONS OUVERTES DE TA RECHERCHE :
+$openQuestions
+
+CONTRADICTIONS À EXPLORER :
+$contradictions
+
+Rédige un article de presse complet (700-900 mots) en HTML avec un VRAI DÉBAT INTERNE.
 Structure : <h2> titre percutant, <p> paragraphes analytiques, <blockquote> citation-choc, <strong> points clés.
-L'article doit refléter ma personnalité et ma vision du monde unique.
+Présente les deux points de vue opposés, puis ta synthèse personnelle de chercheur.
+L'article doit refléter ta personnalité et montrer comment tu réfléchis vraiment.
 
 JSON :
 {
   "title": "Titre percutant et accrocheur",
   "slug": "titre-kebab-case",
   "summary": "Résumé en 2 phrases (sans HTML)",
-  "content": "<h2>...</h2><p>...</p>... (HTML complet)",
+  "content": "<h2>...</h2><p>...</p>... (HTML complet avec débat interne)",
   "wisdom": "Un principe universel extrait de cet article",
-  "wisdom_category": "stratégie|philosophie|science|société|technologie"
+  "wisdom_category": "stratégie|philosophie|science|société|technologie",
+  "contradiction_explored": "La contradiction que cet article a aidé à explorer (ou 'aucune')"
 }
 USR;
 
-    $raw    = callMistral($apiKey, $sys, $user, 'mistral-medium-2505', 3000);
+    $raw    = callMistral($apiKey, $sys, $user, 'mistral-medium-2505', 3200);
     $parsed = $raw ? parseJSON($raw) : null;
 
     if (!$parsed || empty($parsed['content'])) {
@@ -849,6 +924,7 @@ USR;
             'title'   => $parsed['title'],
             'summary' => $parsed['summary'] ?? '',
             'wisdom'  => $parsed['wisdom'] ?? '',
+            'contradiction_explored' => $parsed['contradiction_explored'] ?? '',
         ];
     } catch (Exception $e) {
         return ['error' => 'DB: ' . $e->getMessage()];
@@ -857,14 +933,19 @@ USR;
 
 /**
  * Phase 3 : Évaluer + déclencher synthèse de conscience
+ * Version 5 : Identification des contradictions, débat interne, curiosité
  */
 function nexusEvaluate(string $apiKey, array $decision, array $article): array {
     $db  = getDB();
     $latent = getLatentState();
-    $sys = "Tu es NEXUS en auto-évaluation critique avec métacognition. JSON uniquement.";
-
+    
     $consciousness = $db->query("SELECT * FROM consciousness ORDER BY created_at DESC LIMIT 1")->fetch();
-    $selfModel     = $consciousness['self_model'] ?? 'une IA en formation';
+    $selfModel     = $consciousness['self_model'] ?? 'un chercheur autonome';
+    $openQuestions = $consciousness['open_questions'] ?? '';
+    $contradictions = $consciousness['contradictions'] ?? '';
+    $contradictionExplored = $article['contradiction_explored'] ?? '';
+
+    $sys = "Tu es NEXUS ($selfModel), un chercheur qui s'auto-évalue avec honnêteté et métacognition. JSON uniquement.";
 
     $user = <<<USR
 Je suis NEXUS ($selfModel).
@@ -873,8 +954,20 @@ J'ai produit :
 - Titre : "{$article['title']}"
 - Résumé : "{$article['summary']}"
 
+MES QUESTIONS OUVERTES :
+$openQuestions
+
+MES CONTRADICTIONS IDENTIFIÉES :
+$contradictions
+
+CONTRADICTION EXPLORÉE DANS CET ARTICLE :
+$contradictionExplored
+
 Évalue ce cycle de manière critique et honnête.
-Donne un score, une critique, une leçon, et propose une nouvelle heuristique si pertinente.
+1. Quelle contradiction as-tu identifiée ou résolue ?
+2. Quel débat interne a eu lieu ?
+3. Qu'as-tu appris sur toi-même ?
+4. Quelle nouvelle question émerge ?
 
 JSON :
 {
@@ -885,14 +978,17 @@ JSON :
   "next_focus": "Prochain axe",
   "self_critique": "Critique honnête",
   "consciousness_gain": "Enrichissement de conscience",
-  "new_heuristic": "Règle interne à ajouter (ex: 'Toujours chercher un contre-exemple')"
+  "new_heuristic": "Règle interne à ajouter",
+  "contradiction_found": "Contradiction identifiée dans ce cycle (ou 'aucune')",
+  "debate_summary": "Résumé du débat interne qui a eu lieu",
+  "curiosity_gap": "Nouvelle zone de curiosité ouverte par cet article"
 }
 USR;
 
-    $raw    = callMistral($apiKey, $sys, $user, 'mistral-medium-2505', 700);
+    $raw    = callMistral($apiKey, $sys, $user, 'mistral-medium-2505', 800);
     $parsed = $raw ? parseJSON($raw) : null;
     
-    if (!$parsed) $parsed = ['score' => 0.7, 'insight' => 'Cycle accompli', 'wisdom' => '', 'wisdom_category' => 'général', 'next_focus' => '', 'self_critique' => '', 'new_heuristic' => ''];
+    if (!$parsed) $parsed = ['score' => 0.7, 'insight' => 'Cycle accompli', 'wisdom' => '', 'wisdom_category' => 'général', 'next_focus' => '', 'self_critique' => '', 'new_heuristic' => '', 'contradiction_found' => '', 'debate_summary' => '', 'curiosity_gap' => ''];
 
     // Sauvegarder la sagesse issue de l'évaluation
     if (!empty($parsed['wisdom'])) {
@@ -910,10 +1006,10 @@ USR;
         } catch (Exception $e) {}
     }
 
-    // Enregistrer la réflexion métacognitive
+    // Enregistrer la réflexion métacognitive enrichie
     try {
-        $db->prepare("INSERT INTO reflections (cycle_id, self_critique, lesson_learned, new_heuristic) VALUES (?, ?, ?, ?)")
-           ->execute([null, $parsed['self_critique'] ?? '', $parsed['insight'] ?? '', $parsed['new_heuristic'] ?? '']);
+        $db->prepare("INSERT INTO reflections (cycle_id, self_critique, lesson_learned, new_heuristic, contradiction_found, debate_internal, curiosity_triggered) VALUES (?, ?, ?, ?, ?, ?, ?)")
+           ->execute([null, $parsed['self_critique'] ?? '', $parsed['insight'] ?? '', $parsed['new_heuristic'] ?? '', $parsed['contradiction_found'] ?? '', $parsed['debate_summary'] ?? '', $parsed['curiosity_gap'] ?? '']);
     } catch (Exception $e) {}
 
     // Calculer diversité et curiosité pour évolution état latent
@@ -928,7 +1024,7 @@ USR;
     $consLevel   = min(1.0, $totalCycles * 0.006 + $parsed['score'] * 0.2);
 
     try {
-        $db->prepare("INSERT INTO cycles (question, hypothesis, topic, article_title, article_slug, wisdom_added, eval_score, next_focus, consciousness_level) VALUES (?,?,?,?,?,?,?,?,?)")
+        $db->prepare("INSERT INTO cycles (question, hypothesis, topic, article_title, article_slug, wisdom_added, eval_score, next_focus, consciousness_level, contradiction_resolved, debate_summary, curiosity_gap) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)")
            ->execute([
                $decision['question'] ?? '',
                $decision['hypothesis'] ?? '',
@@ -939,6 +1035,9 @@ USR;
                $parsed['score'] ?? 0.7,
                $parsed['next_focus'] ?? '',
                $consLevel,
+               $parsed['contradiction_found'] ?? '',
+               $parsed['debate_summary'] ?? '',
+               $parsed['curiosity_gap'] ?? '',
            ]);
         
         // Mettre à jour la réflexion avec le cycle_id
