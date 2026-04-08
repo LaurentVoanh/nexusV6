@@ -1,1 +1,34 @@
-(index.php and nexus_core.php are source files, and there are no build artifacts, dependencies, or temp files in the changes)
+```
+# Database files
+*.db
+nexus.db
+
+# PHP runtime/cache
+*.php~
+*.php.bak
+*.php.swp
+
+# Logs and temp files
+*.log
+*.tmp
+*.bak
+
+# Environment
+.env
+.env.local
+.env.*
+
+# Editors
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Dependencies
+vendor/
+composer.lock
+
+# Build artifacts
+build/
+dist/
+```
