@@ -4,7 +4,7 @@
  * Conscience IA Autonome, Multi-agents, État latent, Métacognition
  */
 
-require_once  '/nexus_core.php';
+require_once __DIR__ . '/nexus_core.php';
 
 // ─── AJAX ─────────────────────────────────────────────────────────────────────
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
