@@ -78,7 +78,104 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
         exit;
     }
 
-    // ── CYCLE PHASÉ ──────────────────────────────────────────────────────────
+    // ── GESTION FLUX RSS ─────────────────────────────────────────────────────
+    
+    if ($action === 'get_rss_feeds') {
+        echo json_encode(['success' => true, 'feeds' => getRssFeeds(), 'stats' => getRssFeedStats()]);
+        exit;
+    }
+    
+    if ($action === 'add_rss_feed') {
+        $name = trim($_POST['name'] ?? '');
+        $url = trim($_POST['url'] ?? '');
+        $category = trim($_POST['category'] ?? 'general');
+        $subcategory = trim($_POST['subcategory'] ?? 'general');
+        $searchQuery = trim($_POST['search_query'] ?? null);
+        $priority = max(1, min(10, (int)($_POST['priority'] ?? 5)));
+        
+        $result = addRssFeed($name, $url, $category, $subcategory, $searchQuery, $priority);
+        echo json_encode($result);
+        exit;
+    }
+    
+    if ($action === 'delete_rss_feed') {
+        $id = (int)($_POST['id'] ?? 0);
+        echo json_encode(['success' => deleteRssFeed($id)]);
+        exit;
+    }
+    
+    if ($action === 'toggle_rss_feed') {
+        $id = (int)($_POST['id'] ?? 0);
+        echo json_encode(['success' => toggleRssFeedActive($id)]);
+        exit;
+    }
+    
+    if ($action === 'update_rss_priority') {
+        $id = (int)($_POST['id'] ?? 0);
+        $priority = max(1, min(10, (int)($_POST['priority'] ?? 5)));
+        echo json_encode(['success' => updateRssFeedPriority($id, $priority)]);
+        exit;
+    }
+    
+    if ($action === 'generate_auto_feeds') {
+        $apiKey = loadApiKey();
+        if (!$apiKey) { echo json_encode(['error' => 'Aucune clé API']); exit; }
+        
+        $db = getDB();
+        $consciousness = $db->query("SELECT * FROM consciousness ORDER BY created_at DESC LIMIT 1")->fetch(PDO::FETCH_ASSOC);
+        if (!$consciousness) { echo json_encode(['error' => 'Aucune conscience disponible']); exit; }
+        
+        $result = generateDynamicRSSFeeds($apiKey, $consciousness);
+        echo json_encode($result);
+        exit;
+    }
+
+    // ── MODE AUTOMATIQUE COMPLET ─────────────────────────────────────────────
+    
+    if ($action === 'run_full_auto_cycle') {
+        $apiKey = loadApiKey();
+        if (!$apiKey) { echo json_encode(['error' => 'Aucune clé API', 'step' => 'init']); exit; }
+        
+        $db = getDB();
+        $results = [];
+        
+        // Étape 1: Génération automatique des flux RSS basés sur la conscience
+        $consciousness = $db->query("SELECT * FROM consciousness ORDER BY created_at DESC LIMIT 1")->fetch(PDO::FETCH_ASSOC);
+        if ($consciousness) {
+            $results['auto_feeds'] = generateDynamicRSSFeeds($apiKey, $consciousness);
+        }
+        
+        // Étape 2: Récupération des tendances
+        $trends = fetchGoogleNewsRSS();
+        if (empty($trends)) $trends = getStoredTrends(30);
+        $results['trends_count'] = count($trends);
+        
+        // Étape 3: Absorption et lecture
+        $results['absorption'] = nexusReadAndAbsorb($apiKey, $trends);
+        
+        // Étape 4: Synthèse de conscience
+        $results['consciousness'] = nexusSynthesizeConsciousness($apiKey);
+        
+        // Étape 5: Réflexion et décision
+        $decision = nexusThink($apiKey, $trends);
+        $results['decision'] = $decision;
+        
+        // Étape 6: Écriture de l'article
+        if (!empty($decision['topic'])) {
+            $article = nexusWrite($apiKey, $decision);
+            $results['article'] = $article;
+            
+            // Étape 7: Évaluation
+            if (!isset($article['error'])) {
+                $results['evaluation'] = nexusEvaluate($apiKey, $decision, $article);
+            }
+        }
+        
+        echo json_encode(['success' => true, 'steps' => $results]);
+        exit;
+    }
+
+    // ── CYCLE PHASÉ (étapes individuelles) ────────────────────────────────────
 
     if ($action === 'step_absorb') {
         $apiKey = loadApiKey();
