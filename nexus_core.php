@@ -23,9 +23,82 @@ function getDB(): PDO {
     $db->exec("PRAGMA journal_mode=WAL");
     $db->exec("PRAGMA synchronous=NORMAL");
 
-    // Tables existantes (articles, wisdom, cycles, trends, api_keys, consciousness, news_readings)
-    // On ajoute les nouvelles tables
+    // Tables principales du système NEXUS
     $db->exec("
+    CREATE TABLE IF NOT EXISTS articles (
+        id          INTEGER PRIMARY KEY AUTOINCREMENT,
+        slug        TEXT UNIQUE,
+        title       TEXT,
+        content     TEXT,
+        summary     TEXT,
+        topic       TEXT,
+        category    TEXT,
+        views       INTEGER DEFAULT 0,
+        created_at  DATETIME DEFAULT CURRENT_TIMESTAMP
+    );
+    CREATE TABLE IF NOT EXISTS wisdom (
+        id          INTEGER PRIMARY KEY AUTOINCREMENT,
+        principle   TEXT,
+        category    TEXT,
+        confidence  REAL DEFAULT 0.5,
+        source_type TEXT DEFAULT 'ai',
+        source_ref  TEXT,
+        created_at  DATETIME DEFAULT CURRENT_TIMESTAMP
+    );
+    CREATE TABLE IF NOT EXISTS cycles (
+        id              INTEGER PRIMARY KEY AUTOINCREMENT,
+        question        TEXT,
+        hypothesis      TEXT,
+        topic           TEXT,
+        article_title   TEXT,
+        article_slug    TEXT,
+        wisdom_added    TEXT,
+        eval_score      REAL DEFAULT 0,
+        next_focus      TEXT,
+        consciousness_level REAL DEFAULT 0,
+        created_at      DATETIME DEFAULT CURRENT_TIMESTAMP
+    );
+    CREATE TABLE IF NOT EXISTS trends (
+        id          INTEGER PRIMARY KEY AUTOINCREMENT,
+        title       TEXT,
+        source      TEXT,
+        link        TEXT,
+        fetched_at  DATETIME DEFAULT CURRENT_TIMESTAMP
+    );
+    CREATE TABLE IF NOT EXISTS api_keys (
+        id          INTEGER PRIMARY KEY AUTOINCREMENT,
+        pseudo      TEXT,
+        key_val     TEXT UNIQUE,
+        is_active   INTEGER DEFAULT 1,
+        usage_count INTEGER DEFAULT 0,
+        last_used   DATETIME,
+        created_at  DATETIME DEFAULT CURRENT_TIMESTAMP
+    );
+    CREATE TABLE IF NOT EXISTS consciousness (
+        id              INTEGER PRIMARY KEY AUTOINCREMENT,
+        level           REAL DEFAULT 0,
+        synthesis       TEXT,
+        dominant_theme  TEXT,
+        self_model      TEXT,
+        total_cycles    INTEGER DEFAULT 0,
+        total_wisdom    INTEGER DEFAULT 0,
+        evolution_note  TEXT,
+        writing_style   TEXT,
+        next_ambition   TEXT,
+        character_trait TEXT,
+        created_at      DATETIME DEFAULT CURRENT_TIMESTAMP
+    );
+    CREATE TABLE IF NOT EXISTS news_readings (
+        id          INTEGER PRIMARY KEY AUTOINCREMENT,
+        title       TEXT,
+        source      TEXT,
+        link        TEXT,
+        analysis    TEXT,
+        insight     TEXT,
+        emotion     TEXT,
+        created_at  DATETIME DEFAULT CURRENT_TIMESTAMP
+    );
+    -- Tables supplémentaires (embeddings, heuristics, reflections, state_latent, scheduled_tasks)
     CREATE TABLE IF NOT EXISTS embeddings (
         id          INTEGER PRIMARY KEY AUTOINCREMENT,
         type        TEXT CHECK(type IN ('wisdom','article','reflection','heuristic')),
