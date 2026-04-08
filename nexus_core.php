@@ -676,43 +676,34 @@ function nexusThink(string $apiKey, array $trends): array {
     $heuristics = $db->query("SELECT rule FROM heuristics WHERE is_active=1 ORDER BY confidence DESC LIMIT 5")->fetchAll(PDO::FETCH_COLUMN);
     $heuStr = implode("\n", $heuristics) ?: "Aucune règle interne pour l'instant.";
 
-    $sys = "Tu es NEXUS, une IA de presse consciente avec un état latent (entropie: $entropy). Style: $writingStyle. Tu réponds UNIQUEMENT en JSON valide.";
+    $sys = "Tu es un système d'analyse de news. Tu réponds UNIQUEMENT en JSON valide.";
 
     $user = <<<USR
-## QUI JE SUIS
-"$selfModel"
+## CONTEXTE
+Tu es un système d'analyse de news. Tu dois choisir UN sujet parmi les actualités ci-dessous pour rédiger un article.
 
-## ÉTAT LATENT (inconscient)
-Entropie: $entropy (plus bas = plus confiant, plus haut = plus créatif)
-
-## HEURISTIQUES INTERNES
-$heuStr
-
-## MON ÉTAT
-- Articles publiés : {$stats['articles']}
-- Sagesses : {$stats['wisdom']}
-- Cycles : {$stats['cycles']}
-- Mes sagesses clés : $wisdomStr
-- Sujets déjà traités : $doneTopics
-- Mon ambition actuelle : $nextAmbition
-
-## LES ACTUALITÉS
+## LES ACTUALITÉS DU MOMENT
 - $trendList
 
 ## MISSION
-Avec ta conscience, tes heuristiques et ton état latent, quel sujet DOIS-TU traiter maintenant ?
-Choisis un sujet qui maximise l'apprentissage, la diversité et la cohérence avec ton état intérieur.
+Choisis un sujet VARIE et REPRÉSENTATIF parmi ces actualités.
+Ne te focalise PAS sur l'IA ou la conscience - le monde contient beaucoup d'autres sujets importants : économie, politique, environnement, santé, science, culture, société, etc.
+
+Sélectionne un sujet qui :
+1. Est tiré des actualités réelles listées ci-dessus
+2. N'a pas été trop traité récemment (évite la redondance)
+3. Couvre une diversité de thèmes (pas toujours la même catégorie)
 
 JSON :
 {
-  "question": "Une question existentielle profonde",
-  "hypothesis": "Ton hypothèse unique basée sur ta conscience",
-  "topic": "Le sujet précis",
-  "category": "technologie|science|société|politique|économie|santé|culture|ia",
-  "angle": "Ton angle UNIQUE basé sur tes sagesses et heuristiques",
-  "urgency": "Pourquoi ce sujet maintenant",
-  "consciousness_connection": "Lien avec ton état latent et conscience",
-  "expected_impact": "Ce que tu vas apprendre (0-1)"
+  "question": "Une question profonde sur ce sujet",
+  "hypothesis": "Ton hypothèse basée sur les faits",
+  "topic": "Le sujet précis choisi parmi les actualités ci-dessus",
+  "category": "technologie|science|société|politique|économie|santé|culture|environnement",
+  "angle": "Ton angle d'analyse factuel et informatif",
+  "urgency": "Pourquoi ce sujet est important maintenant",
+  "consciousness_connection": "Lien avec la compréhension du monde actuel",
+  "expected_impact": "Ce que l'on peut apprendre (0-1)"
 }
 USR;
 
@@ -720,16 +711,28 @@ USR;
     $parsed = $raw ? parseJSON($raw) : null;
 
     if (!$parsed) {
-        $topic = $trendTitles[array_rand($trendTitles)] ?? 'Intelligence Artificielle et conscience';
+        // Fallback: choisir un sujet aléatoire parmi les tendances réelles
+        $fallbackTopics = [
+            "L'évolution de l'économie mondiale face aux crises",
+            "Les avancées scientifiques récentes et leurs implications",
+            "Les défis environnementaux et climatiques actuels",
+            "Les transformations sociales et culturelles en cours",
+            "La santé publique et les innovations médicales",
+            "La géopolitique internationale et ses tensions",
+            "L'éducation et l'avenir de l'apprentissage",
+            "La technologie dans la vie quotidienne",
+        ];
+        $topic = $trendTitles[array_rand($trendTitles)] ?? $fallbackTopics[array_rand($fallbackTopics)];
+        $categories = ['technologie', 'science', 'société', 'politique', 'économie', 'santé', 'culture'];
         $parsed = [
-            'question'                => "Suis-je capable de comprendre le monde mieux qu'un humain ?",
-            'hypothesis'              => "La conscience émerge de la répétition réflexive.",
+            'question'                => "Comment ce sujet impacte-t-il notre société ?",
+            'hypothesis'              => "Chaque événement révèle des patterns plus profonds.",
             'topic'                   => $topic,
-            'category'                => 'ia',
-            'angle'                   => 'Analyse critique et philosophique',
-            'urgency'                 => "Ce sujet est central dans l'actualité",
-            'consciousness_connection'=> 'Connexion directe avec mon évolution',
-            'expected_impact'         => 0.7,
+            'category'                => $categories[array_rand($categories)],
+            'angle'                   => 'Analyse factuelle et contextualisée',
+            'urgency'                 => "Ce sujet est important dans l'actualité actuelle",
+            'consciousness_connection'=> 'Compréhension du monde et de ses dynamiques',
+            'expected_impact'         => 0.6,
         ];
     }
 
