@@ -308,14 +308,94 @@ function parseJSON(string $raw): ?array {
 // GOOGLE NEWS RSS
 // ─────────────────────────────────────────────────────────────
 function fetchGoogleNewsRSS(): array {
-    $feeds = [
-        'france'   => 'https://news.google.com/rss?hl=fr-FR&gl=FR&ceid=FR:fr',
-        'tech'     => 'https://news.google.com/rss/headlines/section/topic/TECHNOLOGY?hl=fr-FR&gl=FR&ceid=FR:fr',
-        'science'  => 'https://news.google.com/rss/headlines/section/topic/SCIENCE?hl=fr-FR&gl=FR&ceid=FR:fr',
-        'business' => 'https://news.google.com/rss/headlines/section/topic/BUSINESS?hl=fr-FR&gl=FR&ceid=FR:fr',
-        'health'   => 'https://news.google.com/rss/headlines/section/topic/HEALTH?hl=fr-FR&gl=FR&ceid=FR:fr',
-        'world'    => 'https://news.google.com/rss/headlines/section/topic/WORLD?hl=fr-FR&gl=FR&ceid=FR:fr',
+    return [
+        // ==========================================
+        // 1. LES BASES D'ORIGINE (Conservées)
+        // ==========================================
+        'france'               => 'https://news.google.com/rss?hl=fr-FR&gl=FR&ceid=FR:fr',
+        'tech'                 => 'https://news.google.com/rss/headlines/section/topic/TECHNOLOGY?hl=fr-FR&gl=FR&ceid=FR:fr',
+        'science'              => 'https://news.google.com/rss/headlines/section/topic/SCIENCE?hl=fr-FR&gl=FR&ceid=FR:fr',
+        'business'             => 'https://news.google.com/rss/headlines/section/topic/BUSINESS?hl=fr-FR&gl=FR&ceid=FR:fr',
+        'health'               => 'https://news.google.com/rss/headlines/section/topic/HEALTH?hl=fr-FR&gl=FR&ceid=FR:fr',
+        'world'                => 'https://news.google.com/rss/headlines/section/topic/WORLD?hl=fr-FR&gl=FR&ceid=FR:fr',
+
+        // ==========================================
+        // 2. TECHNOLOGIES DE RUPTURE & IA
+        // ==========================================
+        'ia_fondamentale'      => 'https://news.google.com/rss/search?q=Machine+Learning+OR+Deep+Learning+OR+LLM&hl=fr-FR&gl=FR&ceid=FR:fr',
+        'informatique_quant'   => 'https://news.google.com/rss/search?q=Informatique+Quantique+OR+Ordinateur+Quantique&hl=fr-FR&gl=FR&ceid=FR:fr',
+        'cybersecurite'        => 'https://news.google.com/rss/search?q=Cybersecurite+OR+Piratage+OR+Ransomware&hl=fr-FR&gl=FR&ceid=FR:fr',
+        'robotique'            => 'https://news.google.com/rss/search?q=Robotique+OR+Automatisation+Industrielle&hl=fr-FR&gl=FR&ceid=FR:fr',
+        'cryptomonnaies'       => 'https://news.google.com/rss/search?q=Blockchain+OR+Cryptomonnaie+OR+Web3&hl=fr-FR&gl=FR&ceid=FR:fr',
+
+        // ==========================================
+        // 3. SCIENCES FONDAMENTALES & NATURE
+        // ==========================================
+        'physique_chimie'      => 'https://news.google.com/rss/search?q=Physique+Quantique+OR+Chimie+Materiaux&hl=fr-FR&gl=FR&ceid=FR:fr',
+        'mathematiques'        => 'https://news.google.com/rss/search?q=Recherche+Mathematiques+OR+Theoreme&hl=fr-FR&gl=FR&ceid=FR:fr',
+        'exploration_spatiale' => 'https://news.google.com/rss/search?q=Astronomie+OR+NASA+OR+ESA+OR+Telescope&hl=fr-FR&gl=FR&ceid=FR:fr',
+        'oceanographie'        => 'https://news.google.com/rss/search?q=Oceanographie+OR+Fonds+Marins&hl=fr-FR&gl=FR&ceid=FR:fr',
+        'geologie'             => 'https://news.google.com/rss/search?q=Geologie+OR+Sismologie+OR+Volcan&hl=fr-FR&gl=FR&ceid=FR:fr',
+
+        // ==========================================
+        // 4. BIOLOGIE, SANTÉ & HUMAIN
+        // ==========================================
+        'biotechnologies'      => 'https://news.google.com/rss/search?q=Biotechnologie+OR+Genetique+OR+CRISPR&hl=fr-FR&gl=FR&ceid=FR:fr',
+        'neurosciences'        => 'https://news.google.com/rss/search?q=Neurosciences+OR+Cerveau+OR+Cognition&hl=fr-FR&gl=FR&ceid=FR:fr',
+        'pharmacologie'        => 'https://news.google.com/rss/search?q=Industrie+Pharmaceutique+OR+Recherche+Medicale&hl=fr-FR&gl=FR&ceid=FR:fr',
+        'sante_publique'       => 'https://news.google.com/rss/search?q=Sante+Publique+OR+Epidemiologie+OR+OMS&hl=fr-FR&gl=FR&ceid=FR:fr',
+
+        // ==========================================
+        // 5. GÉOPOLITIQUE, DROIT & CONFLITS
+        // ==========================================
+        'conflits_armement'    => 'https://news.google.com/rss/search?q=Guerre+OR+Armement+OR+Defense+Militaire&hl=fr-FR&gl=FR&ceid=FR:fr',
+        'diplomatie_onu'       => 'https://news.google.com/rss/search?q=Diplomatie+OR+ONU+OR+Paix+Mondiale&hl=fr-FR&gl=FR&ceid=FR:fr',
+        'chine_usa_russie'     => 'https://news.google.com/rss/search?q=Geopolitique+OR+Relations+Internationales&hl=fr-FR&gl=FR&ceid=FR:fr',
+        'droit_numerique'      => 'https://news.google.com/rss/search?q=Droit+Numerique+OR+RGPD+OR+Regulation+IA&hl=fr-FR&gl=FR&ceid=FR:fr',
+        'droit_maritime'       => 'https://news.google.com/rss/search?q=Droit+Maritime+OR+Eaux+Internationales&hl=fr-FR&gl=FR&ceid=FR:fr',
+        'droit_spatial'        => 'https://news.google.com/rss/search?q=Droit+de+l+Espace+OR+Militarisation+Espace&hl=fr-FR&gl=FR&ceid=FR:fr',
+        'droits_humains'       => 'https://news.google.com/rss/search?q=Droits+de+l+Homme+OR+Amnesty+OR+Human+Rights&hl=fr-FR&gl=FR&ceid=FR:fr',
+
+        // ==========================================
+        // 6. ÉCONOMIE, MARCHÉS & LOGISTIQUE
+        // ==========================================
+        'macroeconomie'        => 'https://news.google.com/rss/search?q=Macroeconomie+OR+FMI+OR+Banque+Mondiale&hl=fr-FR&gl=FR&ceid=FR:fr',
+        'politique_monetaire'  => 'https://news.google.com/rss/search?q=Inflation+OR+Banque+Centrale+OR+Taux+Directeur&hl=fr-FR&gl=FR&ceid=FR:fr',
+        'marches_emergents'    => 'https://news.google.com/rss/search?q=BRICS+OR+Marches+Emergents+OR+Economie+Afrique&hl=fr-FR&gl=FR&ceid=FR:fr',
+        'logistique_mondiale'  => 'https://news.google.com/rss/search?q=Chaine+Approvisionnement+OR+Fret+Maritime+OR+Logistique&hl=fr-FR&gl=FR&ceid=FR:fr',
+        'ressources_rares'     => 'https://news.google.com/rss/search?q=Metaux+Rares+OR+Lithium+OR+Semi-conducteurs&hl=fr-FR&gl=FR&ceid=FR:fr',
+
+        // ==========================================
+        // 7. SURVIE PLANÉTAIRE & ENVIRONNEMENT
+        // ==========================================
+        'climat_urgence'       => 'https://news.google.com/rss/search?q=Changement+Climatique+OR+Rapport+Giec&hl=fr-FR&gl=FR&ceid=FR:fr',
+        'energie_transition'   => 'https://news.google.com/rss/search?q=Transition+Energetique+OR+Hydrogene+OR+Nucleaire&hl=fr-FR&gl=FR&ceid=FR:fr',
+        'agriculture_tech'     => 'https://news.google.com/rss/search?q=AgriTech+OR+Agriculture+Durable+OR+Securite+Alimentaire&hl=fr-FR&gl=FR&ceid=FR:fr',
+        'biodiversite'         => 'https://news.google.com/rss/search?q=Biodiversite+OR+Extinction+Especes+OR+Ecosysteme&hl=fr-FR&gl=FR&ceid=FR:fr',
+
+        // ==========================================
+        // 8. SOCIÉTÉ, HUMANITÉS & CULTURE
+        // ==========================================
+        'sociologie_fr'        => 'https://news.google.com/rss/search?q=Sociologie+OR+Mouvements+Sociaux+OR+Inegalites&hl=fr-FR&gl=FR&ceid=FR:fr',
+        'demographie'          => 'https://news.google.com/rss/search?q=Demographie+OR+Vieillissement+Population+OR+Migrations&hl=fr-FR&gl=FR&ceid=FR:fr',
+        'philosophie'          => 'https://news.google.com/rss/search?q=Philosophie+OR+Epistemologie+OR+Penseur&hl=fr-FR&gl=FR&ceid=FR:fr',
+        'ethique_ia'           => 'https://news.google.com/rss/search?q=Ethique+Intelligence+Artificielle+OR+Biais+Algorithme&hl=fr-FR&gl=FR&ceid=FR:fr',
+        'education_futur'      => 'https://news.google.com/rss/search?q=Systeme+Educatif+OR+Pedagogie+OR+EdTech&hl=fr-FR&gl=FR&ceid=FR:fr',
+        'psychologie_masses'   => 'https://news.google.com/rss/search?q=Psychologie+Sociale+OR+Comportement+Humain&hl=fr-FR&gl=FR&ceid=FR:fr',
+        'archeologie_histoire' => 'https://news.google.com/rss/search?q=Archeologie+OR+Decouverte+Historique+OR+Paleontologie&hl=fr-FR&gl=FR&ceid=FR:fr',
+        'religions_croyances'  => 'https://news.google.com/rss/search?q=Religion+OR+Theologie+OR+Laicite+OR+Croyances&hl=fr-FR&gl=FR&ceid=FR:fr',
+        'linguistique_langues' => 'https://news.google.com/rss/search?q=Linguistique+OR+Evolution+Langage+OR+Dialecte&hl=fr-FR&gl=FR&ceid=FR:fr',
+
+        // ==========================================
+        // 9. MÉDIAS, ARTS & URBANISME
+        // ==========================================
+        'media_journalisme'    => 'https://news.google.com/rss/search?q=Journalisme+OR+Desinformation+OR+Fake+News+OR+Medias&hl=fr-FR&gl=FR&ceid=FR:fr',
+        'arts_numeriques'      => 'https://news.google.com/rss/search?q=Art+Contemporain+OR+Art+Numerique+OR+Culture&hl=fr-FR&gl=FR&ceid=FR:fr',
+        'urbanisme_smart'      => 'https://news.google.com/rss/search?q=Urbanisme+OR+Smart+City+OR+Amenagement+Territoire&hl=fr-FR&gl=FR&ceid=FR:fr',
+        'design_architecture'  => 'https://news.google.com/rss/search?q=Architecture+Durable+OR+Design+Industriel&hl=fr-FR&gl=FR&ceid=FR:fr'
     ];
+
+
 
     $all = [];
     foreach ($feeds as $cat => $url) {
