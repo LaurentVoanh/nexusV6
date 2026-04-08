@@ -147,7 +147,7 @@ function getDB(): PDO {
         contradictions      TEXT,
         memory_graph        TEXT,
         core_beliefs        TEXT,
-        values              TEXT,
+        "values"            TEXT,
         biases_detected     TEXT,
         growth_areas        TEXT,
         meta_cognition      TEXT,
